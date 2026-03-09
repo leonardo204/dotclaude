@@ -41,7 +41,24 @@
 - **매 턴 종료 시** `live-set`으로 아래 key 업데이트:
   - `current_task`, `working_files`, `key_findings`
 
-### 에이전트 시스템
+### Agent Delegation
+
+**메인 컨텍스트는 사용자 대화 + 판단 + 위임에 집중. 실행은 Agent에 맡긴다.**
+
+필수 트리거:
+
+| 트리거 조건 | Agent 유형 |
+|-------------|-----------|
+| 파일 3개 이상 읽기/수정 | `general-purpose` |
+| 멀티스텝 실행 (5단계 이상) | `general-purpose` |
+| `/project:implement` 실행 | 파이프라인 (아래 참조) |
+| 코드베이스 구조 파악 | `Explore` |
+| 독립 작업 2개 이상 동시 | Agent 병렬 생성 |
+| 빌드/테스트/설치 장시간 | Agent (`run_in_background`) |
+
+직접 처리: 단일 파일 읽기/수정, 특정 검색(Glob/Grep), 즉답, 1-2단계 작업
+
+### 커스텀 에이전트 (`.claude/agents/`)
 
 | 에이전트 | 역할 | 수정 권한 |
 |----------|------|:---------:|
