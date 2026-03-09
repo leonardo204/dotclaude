@@ -111,6 +111,8 @@ function getOAuthToken() {
       // credentials may be an array or single object
       const entries = Array.isArray(creds) ? creds : [creds];
       for (const entry of entries) {
+        if (entry.claudeAiOauth?.accessToken)
+          return entry.claudeAiOauth.accessToken;
         if (entry.accessToken) return entry.accessToken;
         if (entry.oauthAccount?.accessToken)
           return entry.oauthAccount.accessToken;
@@ -129,6 +131,8 @@ function getOAuthToken() {
       const creds = JSON.parse(readFileSync(p, "utf8"));
       const entries = Array.isArray(creds) ? creds : [creds];
       for (const entry of entries) {
+        if (entry.claudeAiOauth?.accessToken)
+          return entry.claudeAiOauth.accessToken;
         if (entry.accessToken) return entry.accessToken;
         if (entry.oauthAccount?.accessToken)
           return entry.oauthAccount.accessToken;
