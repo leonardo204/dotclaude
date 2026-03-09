@@ -12,7 +12,7 @@
  * Portable: copy .claude/scripts/ to any project.
  */
 
-import { existsSync, readFileSync, writeFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, readdirSync, unlinkSync } from "node:fs";
 import { join, basename } from "node:path";
 import { execSync } from "node:child_process";
 import { homedir } from "node:os";
@@ -230,11 +230,17 @@ function fetchUsageSync() {
   if (cached) {
     // If rate-limited with backoff, serve stale data or skip
     if (cached._rateLimited) {
-      const backoffMs =
-        Math.min(120_000 * Math.pow(2, (cached._rlCount || 1) - 1), 600_000);
-      if (Date.now() - (cached._ts || 0) < backoffMs) {
-        // Return stale usage data if available, else null
-        return cached.five_hour || cached.seven_day ? cached : null;
+      const hasStaleData = !!(cached.five_hour || cached.seven_day);
+      // No stale data + too many retries → reset cache and retry fresh
+      if (!hasStaleData && (cached._rlCount || 0) >= 5) {
+        try { unlinkSync(CACHE_FILE); } catch {}
+        // fall through to API call below
+      } else {
+        const backoffMs =
+          Math.min(120_000 * Math.pow(2, (cached._rlCount || 1) - 1), 600_000);
+        if (Date.now() - (cached._ts || 0) < backoffMs) {
+          return hasStaleData ? cached : { _rateLimited: true };
+        }
       }
     } else {
       return cached;
@@ -258,7 +264,7 @@ function fetchUsageSync() {
         { ...(cached || {}), _rateLimited: true, _rlCount: rlCount },
         false
       );
-      return cached?.five_hour || cached?.seven_day ? cached : null;
+      return cached?.five_hour || cached?.seven_day ? cached : { _rateLimited: true };
     }
 
     if (data.five_hour || data.seven_day) {
@@ -393,10 +399,14 @@ async function main() {
     const usage = fetchUsageSync();
     if (usage) {
       const limitParts = [];
-      const fiveH = renderLimit("5h", usage.five_hour);
-      const weekly = renderLimit("wk", usage.seven_day);
-      if (fiveH) limitParts.push(fiveH);
-      if (weekly) limitParts.push(weekly);
+      if (usage._rateLimited && !usage.five_hour && !usage.seven_day) {
+        limitParts.push(`5h:${C.dim}--%${C.reset} wk:${C.dim}--%${C.reset}`);
+      } else {
+        const fiveH = renderLimit("5h", usage.five_hour);
+        const weekly = renderLimit("wk", usage.seven_day);
+        if (fiveH) limitParts.push(fiveH);
+        if (weekly) limitParts.push(weekly);
+      }
       if (limitParts.length > 0) {
         parts.push(limitParts.join(" "));
       }
