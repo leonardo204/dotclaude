@@ -99,7 +99,61 @@ function updateCtxState(cwd, percent) {
 }
 
 // ── OAuth credentials ──
+const OAUTH_CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e";
+
+function extractOAuth(entry) {
+  const oauth = entry.claudeAiOauth || entry.oauthAccount || entry;
+  if (oauth?.accessToken) {
+    return {
+      accessToken: oauth.accessToken,
+      refreshToken: oauth.refreshToken || null,
+      expiresAt: oauth.expiresAt || null,
+    };
+  }
+  return null;
+}
+
+function refreshOAuthToken(refreshToken) {
+  try {
+    const body = `grant_type=refresh_token&refresh_token=${encodeURIComponent(refreshToken)}&client_id=${OAUTH_CLIENT_ID}`;
+    const result = execSync(
+      `curl -s -m 5 -X POST "https://console.anthropic.com/v1/oauth/token" -H "Content-Type: application/x-www-form-urlencoded" -d '${body}'`,
+      { encoding: "utf8", timeout: 8000 }
+    );
+    const data = JSON.parse(result);
+    if (data.access_token) {
+      // Write back to file credentials if possible
+      writeBackCredentials(data);
+      return data.access_token;
+    }
+  } catch {}
+  return null;
+}
+
+function writeBackCredentials(tokenData) {
+  const credPath = join(homedir(), ".claude", ".credentials.json");
+  try {
+    if (!existsSync(credPath)) return;
+    const creds = JSON.parse(readFileSync(credPath, "utf8"));
+    const entries = Array.isArray(creds) ? creds : [creds];
+    for (const entry of entries) {
+      const target = entry.claudeAiOauth || entry.oauthAccount || entry;
+      if (target?.accessToken) {
+        target.accessToken = tokenData.access_token;
+        if (tokenData.refresh_token) target.refreshToken = tokenData.refresh_token;
+        if (tokenData.expires_in) {
+          target.expiresAt = Date.now() + tokenData.expires_in * 1000;
+        }
+        break;
+      }
+    }
+    writeFileSync(credPath, JSON.stringify(creds, null, 2));
+  } catch {}
+}
+
 function getOAuthToken() {
+  let oauth = null;
+
   // 1) macOS Keychain
   if (process.platform === "darwin") {
     try {
@@ -108,39 +162,43 @@ function getOAuthToken() {
         { encoding: "utf8", timeout: 3000 }
       ).trim();
       const creds = JSON.parse(raw);
-      // credentials may be an array or single object
       const entries = Array.isArray(creds) ? creds : [creds];
       for (const entry of entries) {
-        if (entry.claudeAiOauth?.accessToken)
-          return entry.claudeAiOauth.accessToken;
-        if (entry.accessToken) return entry.accessToken;
-        if (entry.oauthAccount?.accessToken)
-          return entry.oauthAccount.accessToken;
+        oauth = extractOAuth(entry);
+        if (oauth) break;
       }
     } catch {}
   }
 
   // 2) File-based credentials
-  const credPaths = [
-    join(homedir(), ".claude", ".credentials.json"),
-    join(homedir(), ".claude", "credentials.json"),
-  ];
-  for (const p of credPaths) {
-    try {
-      if (!existsSync(p)) continue;
-      const creds = JSON.parse(readFileSync(p, "utf8"));
-      const entries = Array.isArray(creds) ? creds : [creds];
-      for (const entry of entries) {
-        if (entry.claudeAiOauth?.accessToken)
-          return entry.claudeAiOauth.accessToken;
-        if (entry.accessToken) return entry.accessToken;
-        if (entry.oauthAccount?.accessToken)
-          return entry.oauthAccount.accessToken;
-      }
-    } catch {}
+  if (!oauth) {
+    const credPaths = [
+      join(homedir(), ".claude", ".credentials.json"),
+      join(homedir(), ".claude", "credentials.json"),
+    ];
+    for (const p of credPaths) {
+      try {
+        if (!existsSync(p)) continue;
+        const creds = JSON.parse(readFileSync(p, "utf8"));
+        const entries = Array.isArray(creds) ? creds : [creds];
+        for (const entry of entries) {
+          oauth = extractOAuth(entry);
+          if (oauth) break;
+        }
+        if (oauth) break;
+      } catch {}
+    }
   }
 
-  return null;
+  if (!oauth) return null;
+
+  // Check expiry and refresh if needed
+  if (oauth.expiresAt && oauth.expiresAt <= Date.now() && oauth.refreshToken) {
+    const newToken = refreshOAuthToken(oauth.refreshToken);
+    if (newToken) return newToken;
+  }
+
+  return oauth.accessToken;
 }
 
 // ── Usage API with cache ──
@@ -148,6 +206,8 @@ function loadCache() {
   try {
     if (!existsSync(CACHE_FILE)) return null;
     const data = JSON.parse(readFileSync(CACHE_FILE, "utf8"));
+    // Rate-limited entries use their own backoff logic in fetchUsageSync
+    if (data._rateLimited) return data;
     const age = Date.now() - (data._ts || 0);
     const ttl = data._ok ? CACHE_TTL_OK : CACHE_TTL_FAIL;
     if (age < ttl) return data;
@@ -167,19 +227,42 @@ function saveCache(data, ok) {
 function fetchUsageSync() {
   // Check cache first
   const cached = loadCache();
-  if (cached) return cached;
+  if (cached) {
+    // If rate-limited with backoff, serve stale data or skip
+    if (cached._rateLimited) {
+      const backoffMs =
+        Math.min(120_000 * Math.pow(2, (cached._rlCount || 1) - 1), 600_000);
+      if (Date.now() - (cached._ts || 0) < backoffMs) {
+        // Return stale usage data if available, else null
+        return cached.five_hour || cached.seven_day ? cached : null;
+      }
+    } else {
+      return cached;
+    }
+  }
 
   const token = getOAuthToken();
   if (!token) return null;
 
   try {
     const result = execSync(
-      `curl -s -m 5 -H "Authorization: Bearer ${token}" "https://api.anthropic.com/api/oauth/usage"`,
+      `curl -s -m 5 -H "Authorization: Bearer ${token}" -H "anthropic-beta: oauth-2025-04-20" "https://api.anthropic.com/api/oauth/usage"`,
       { encoding: "utf8", timeout: 8000 }
     );
     const data = JSON.parse(result);
+
+    // Check for rate limit error
+    if (data.error?.type === "rate_limit_error") {
+      const rlCount = (cached?._rlCount || 0) + 1;
+      saveCache(
+        { ...(cached || {}), _rateLimited: true, _rlCount: rlCount },
+        false
+      );
+      return cached?.five_hour || cached?.seven_day ? cached : null;
+    }
+
     if (data.five_hour || data.seven_day) {
-      saveCache(data, true);
+      saveCache({ ...data, _rateLimited: false, _rlCount: 0 }, true);
       return data;
     }
     saveCache({}, false);
@@ -207,7 +290,9 @@ function formatDuration(ms) {
 function renderLimit(label, info) {
   if (!info || info.utilization == null) return null;
 
-  const pct = Math.round(info.utilization * 100);
+  // API returns utilization as 0-100 (e.g. 38.0 = 38%)
+  const raw = info.utilization;
+  const pct = Math.round(raw > 1 ? raw : raw * 100);
   const resetStr = info.resets_at
     ? formatDuration(new Date(info.resets_at).getTime() - Date.now())
     : null;
@@ -299,12 +384,18 @@ async function main() {
       }
     }
 
-    // 4. Context %
+    // 4. Model
+    const modelName = stdin.model?.display_name;
+    if (modelName) {
+      parts.push(`${C.bold}${modelName}${C.reset}`);
+    }
+
+    // 5. Context %
     const percent = getContextPercent(stdin);
     updateCtxState(cwd, percent);
     parts.push(renderContext(percent));
 
-    // 5. Agent count
+    // 6. Agent count
     const agentCount = countSubagents(stdin.session_id);
     if (agentCount > 0) {
       parts.push(`${C.dim}agents:${agentCount}${C.reset}`);
