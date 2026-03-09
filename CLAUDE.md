@@ -8,6 +8,7 @@
 
 - **CLAUDE.md는 slim하게 유지**: 항목당 1줄 이내. 길어지면 별도 문서로 분리 후 링크
 - **별도 문서 위치**: 관련 문서가 있으면 거기에 추가, 없으면 `Ref-docs/claude/`에 신규 생성
+- **CLAUDE.md 변경 시 README.md도 반드시 업데이트**: 기능/구조/규칙 변경이 README에 반영되어야 함
 
 ### 언어 정책
 
@@ -162,6 +163,7 @@
 | `project-local/CLAUDE.md` COMMON 섹션 | ← `global/CLAUDE.md` Agent Delegation 등과 일치 확인 |
 | `project-local/hooks/*.sh` | 이 프로젝트 `.claude/hooks/`에도 반영 |
 | `project-local/scripts/context-monitor.mjs` | → `global/scripts/` + `~/.claude/scripts/` |
+| `CLAUDE.md` (any) | → `README.md` 관련 섹션 업데이트 |
 
 ---
 
