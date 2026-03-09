@@ -245,7 +245,7 @@ dotclaude/
 │   └── MEMORY-example.md             # 자동 메모리 예시
 │
 ├── project-local/                     ← 프로젝트 .claude/ 에 배치되는 템플릿
-│   ├── CLAUDE.md                      # 프로젝트 가이드 (COMMON + PROJECT)
+│   ├── CLAUDE.md                      # 프로젝트 가이드 (글로벌 참조 + PROJECT)
 │   ├── settings.json                  # Hook 등록
 │   ├── agents/                        # 커스텀 에이전트 (7개)
 │   ├── commands/                      # 슬래시 명령어 (6개)
@@ -285,7 +285,7 @@ claude                    # Claude Code 실행
 
 - 기존 `.claude/` 설정을 `.claude/.backup-{timestamp}/`에 백업
 - 기존 hooks/commands 보존하며 시스템 구성 요소 머지
-- 기존 `CLAUDE.md`를 COMMON + PROJECT 구조로 재구성 (상세 내용은 문서로 분리)
+- 기존 `CLAUDE.md`의 PROJECT 섹션을 보존하고 글로벌 참조 안내를 추가 (공통 규칙은 `~/.claude/CLAUDE.md`에서 로드)
 
 ### 일상 작업 흐름
 

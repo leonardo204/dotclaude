@@ -263,18 +263,15 @@ cp "$SRC/CLAUDE.md" CLAUDE.md
 #### 기존 CLAUDE.md가 있는 경우
 
 1. 기존 CLAUDE.md에서 **PROJECT 섹션 내용을 추출**하여 보존
-2. repo 템플릿(`$SRC/CLAUDE.md`)의 **COMMON 섹션을 그대로 사용**
-3. 보존한 PROJECT 섹션을 새 COMMON 아래에 결합
+2. repo 템플릿(`$SRC/CLAUDE.md`)을 기반으로 사용 (글로벌 참조 안내 + PROJECT 구조)
+3. 보존한 PROJECT 섹션을 템플릿의 PROJECT 위치에 삽입
 
 결과 구조:
 ```markdown
 # Claude Code 개발 가이드
 
----
-
-## COMMON
-
-(repo 템플릿의 COMMON — 항상 최신)
+> 공통 규칙(Agent Delegation, 커밋 정책, Context DB 등)은 글로벌 설정(`~/.claude/CLAUDE.md`)을 따릅니다.
+> 글로벌 미설치 시: `curl -fsSL https://raw.githubusercontent.com/leonardo204/dotclaude/main/install.sh | bash`
 
 ---
 
@@ -286,6 +283,8 @@ cp "$SRC/CLAUDE.md" CLAUDE.md
 
 *최종 업데이트: {오늘 날짜}*
 ```
+
+**주의**: COMMON 섹션은 포함하지 않는다. 공통 규칙은 글로벌 CLAUDE.md(`~/.claude/CLAUDE.md`)에서 자동 로드된다.
 
 초안을 사용자에게 보여주고 확인.
 
@@ -338,7 +337,7 @@ rm -rf "$DOTCLAUDE_TMP"
 - .claude/scripts/ (context-monitor.mjs)
 - .claude/settings.json (시스템 hooks + 프로젝트 고유 설정 머지)
 - {DOC_ROOT}/claude/ (ref-docs 4개 — context-db, context-monitor, conventions, setup)
-- CLAUDE.md (COMMON=최신, PROJECT=보존, ref-docs 경로 치환 완료)
+- CLAUDE.md (글로벌 참조 안내 + PROJECT=보존, ref-docs 경로 치환 완료)
 
 다음 단계:
 1. CLAUDE.md PROJECT 섹션 확인
