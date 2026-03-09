@@ -68,8 +68,10 @@ Context7 MCP 사용 가능 시: `resolve-library-id` → `query-docs` 순서로 
 
 ### 커스텀 에이전트 (`.claude/agents/`)
 
-| subagent_type | 역할 | 수정 권한 |
-|---------------|------|:---------:|
+**호출 방법**: `subagent_type: "general-purpose"`로 Agent 생성 후, 프롬프트 첫 줄에 `.claude/agents/<name>.md`를 Read하여 지침을 포함시킨다. `subagent_type`에 커스텀 이름을 직접 지정하면 에러 발생.
+
+| 에이전트 | 역할 | 수정 권한 |
+|----------|------|:---------:|
 | `planner` | 요청 분석 → 태스크 분해 + 수용 기준 정의 | ❌ |
 | `architect` | 설계/구현 검토 + 아키텍처 타당성 검증 | ❌ |
 | `ralph` | 끈질긴 구현 — 완료+검증될 때까지 절대 중단 안 함 | ✅ |
@@ -77,6 +79,14 @@ Context7 MCP 사용 가능 시: `resolve-library-id` → `query-docs` 순서로 
 | `reviewer` | 코드 리뷰 — 보안/정확성/품질 | ❌ |
 | `debugger` | 버그/에러 근본 원인 진단 | ❌ |
 | `test-engineer` | 테스트 전략 수립 + 테스트 코드 작성 | ✅ |
+
+**예시**:
+```
+Agent(subagent_type: "general-purpose", prompt: "
+.claude/agents/ralph.md의 지침을 따라 작업하라.
+[태스크 내용...]
+")
+```
 
 ### 구현 파이프라인
 
