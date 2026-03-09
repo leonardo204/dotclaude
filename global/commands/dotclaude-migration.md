@@ -3,7 +3,8 @@
 ## 핵심 원칙
 
 - **모든 시스템 파일은 dotclaude 저장소에서 직접 복사한다. 절대 내용을 기억해서 작성하지 않는다.**
-- **시스템 파일(hooks, commands, agents, db, scripts, settings)은 항상 repo 최신으로 클린 교체한다.**
+- **시스템 파일은 항상 repo 최신으로 클린 교체한다.**
+- **교체 전 반드시 충돌 영향 분석을 수행하고 사용자 확인을 받는다.**
 - **CLAUDE.md의 PROJECT 섹션은 보존한다.**
 
 ## 실행 순서
@@ -27,37 +28,165 @@ SRC="$DOTCLAUDE_TMP/project-local"
 
 클론 실패 시 중단.
 
-### 3단계: 시스템 파일 클린 설치
+### 3단계: 충돌 영향 분석
 
-디렉토리 생성 후 시스템 파일을 repo에서 **무조건 덮어쓰기**:
+클린 설치 전에 기존 프로젝트 파일과의 충돌을 분석하여 사용자에게 리포트한다.
+
+#### 3-1. 커스터마이징 감지
+
+시스템 파일과 동일 이름이지만 내용이 변경된 파일을 찾는다:
+
+```bash
+# 시스템 에이전트 중 프로젝트에서 커스터마이징한 것
+for f in "$SRC"/agents/*.md; do
+    name=$(basename "$f")
+    if [ -f ".claude/agents/$name" ]; then
+        if ! diff -q "$f" ".claude/agents/$name" >/dev/null 2>&1; then
+            echo "[변경됨] agents/$name"
+        fi
+    fi
+done
+
+# 시스템 hook 중 프로젝트에서 커스터마이징한 것
+for f in "$SRC"/hooks/*.sh; do
+    name=$(basename "$f")
+    if [ -f ".claude/hooks/$name" ]; then
+        if ! diff -q "$f" ".claude/hooks/$name" >/dev/null 2>&1; then
+            echo "[변경됨] hooks/$name"
+        fi
+    fi
+done
+
+# 시스템 command 중 프로젝트에서 커스터마이징한 것
+for f in "$SRC"/commands/*.md; do
+    name=$(basename "$f")
+    if [ -f ".claude/commands/$name" ]; then
+        if ! diff -q "$f" ".claude/commands/$name" >/dev/null 2>&1; then
+            echo "[변경됨] commands/$name"
+        fi
+    fi
+done
+```
+
+#### 3-2. 프로젝트 고유 파일 식별
+
+시스템 파일이 아닌 프로젝트 고유 파일을 식별한다:
+
+```bash
+# 시스템 에이전트 이름 목록
+SYS_AGENTS="ralph planner architect verifier reviewer debugger test-engineer"
+for f in .claude/agents/*.md; do
+    name=$(basename "$f" .md)
+    if ! echo "$SYS_AGENTS" | grep -qw "$name"; then
+        echo "[프로젝트 고유] agents/$name.md"
+    fi
+done
+
+# 시스템 hook 이름 목록
+SYS_HOOKS="session-start on-prompt post-tool-edit post-tool-bash on-stop ralph-persist"
+for f in .claude/hooks/*.sh; do
+    name=$(basename "$f" .sh)
+    if ! echo "$SYS_HOOKS" | grep -qw "$name"; then
+        echo "[프로젝트 고유] hooks/$name.sh"
+    fi
+done
+
+# 시스템 command 이름 목록
+SYS_CMDS="implement commit tellme discover reportdb"
+for f in .claude/commands/*.md; do
+    name=$(basename "$f" .md)
+    if ! echo "$SYS_CMDS" | grep -qw "$name"; then
+        echo "[프로젝트 고유] commands/$name.md"
+    fi
+done
+```
+
+#### 3-3. settings.json 충돌 분석
+
+기존 settings.json에 프로젝트 고유 설정이 있는지 확인:
+
+```bash
+# 기존 settings.json의 키 목록
+cat .claude/settings.json 2>/dev/null
+# 시스템 settings.json의 키 목록
+cat "$SRC/settings.json"
+```
+
+비교 항목:
+- **hooks 외 설정** (statusLine, enabledPlugins, permissions 등): 교체 시 유실됨
+- **프로젝트 고유 hook 등록**: 시스템 settings.json에 없는 hook event나 matcher
+
+#### 3-4. 사용자에게 영향 리포트
+
+```
+## 충돌 영향 분석
+
+### 커스터마이징된 시스템 파일 (교체 시 변경사항 유실)
+- agents/reviewer.md — 프로젝트 맞춤 리뷰 기준 포함
+- hooks/on-prompt.sh — 커스텀 컨텍스트 주입 로직 추가
+(없으면: "커스터마이징 없음 ✅")
+
+### 프로젝트 고유 파일 (영향 없음 — 보존됨)
+- agents/data-analyst.md
+- commands/deploy.md
+(없으면: "프로젝트 고유 파일 없음")
+
+### settings.json 프로젝트 고유 설정 (교체 시 유실)
+- enabledPlugins: {...}
+- statusLine: {...}
+(없으면: "프로젝트 고유 설정 없음 ✅")
+
+### 권장 조치
+- [자동] 프로젝트 고유 파일은 그대로 보존됩니다
+- [확인 필요] 커스터마이징된 시스템 파일 N개가 repo 버전으로 교체됩니다
+- [확인 필요] settings.json의 프로젝트 고유 설정을 머지해야 합니다
+
+진행할까요? (Y: 전체 진행 / N: 중단)
+```
+
+### 4단계: 시스템 파일 클린 설치
+
+사용자 승인 후 실행.
 
 ```bash
 mkdir -p .claude/agents .claude/db .claude/hooks .claude/commands .claude/scripts
 
-# 에이전트 (7개) — 클린 교체
+# 에이전트 — 클린 교체
 cp "$SRC"/agents/*.md .claude/agents/
 
 # DB 스키마 + Helper CLI — 클린 교체 (context.db는 유지)
 cp "$SRC"/db/init.sql .claude/db/
 cp "$SRC"/db/helper.sh .claude/db/
 
-# Hooks (6개) — 클린 교체
+# Hooks — 클린 교체
 cp "$SRC"/hooks/*.sh .claude/hooks/
 chmod +x .claude/hooks/*.sh
 
-# Commands (5개) — 클린 교체
+# Commands — 클린 교체
 cp "$SRC"/commands/*.md .claude/commands/
 
 # HUD 스크립트 — 클린 교체
 cp "$SRC"/scripts/context-monitor.mjs .claude/scripts/
+```
 
-# settings.json — 클린 교체
+### 5단계: settings.json 처리
+
+#### 프로젝트 고유 설정이 없는 경우
+
+```bash
 cp "$SRC"/settings.json .claude/settings.json
 ```
 
-**주의**: 프로젝트 고유 hooks/commands/agents (시스템 파일과 다른 이름)는 삭제되지 않음 (cp는 덮어쓰기만).
+#### 프로젝트 고유 설정이 있는 경우
 
-### 4단계: Context DB
+시스템 settings.json을 기반으로 프로젝트 고유 설정을 머지:
+
+1. `$SRC/settings.json`을 베이스로 사용 (hooks 설정 = 최신)
+2. 기존 settings.json에서 hooks 외 프로젝트 고유 키(enabledPlugins, permissions 등)를 추출
+3. 베이스에 프로젝트 고유 키를 추가
+4. 기존 settings.json에 프로젝트 고유 hook 등록이 있으면 시스템 hooks 배열에 append
+
+### 6단계: Context DB
 
 DB 없으면 생성, 있으면 유지:
 
@@ -65,7 +194,7 @@ DB 없으면 생성, 있으면 유지:
 [ ! -f ".claude/db/context.db" ] && sqlite3 .claude/db/context.db < .claude/db/init.sql
 ```
 
-### 5단계: CLAUDE.md 재구성
+### 7단계: CLAUDE.md 재구성
 
 #### 기존 CLAUDE.md가 없는 경우
 
@@ -104,7 +233,7 @@ cp "$SRC/CLAUDE.md" CLAUDE.md
 
 초안을 사용자에게 보여주고 확인.
 
-### 6단계: .gitignore 업데이트
+### 8단계: .gitignore 업데이트
 
 ```bash
 grep -q 'context.db' .gitignore 2>/dev/null || echo -e '\n# Claude Code runtime\n.claude/db/context.db' >> .gitignore
@@ -115,7 +244,7 @@ grep -q '.hud_cache' .gitignore 2>/dev/null || echo '.claude/.hud_cache' >> .git
 grep -q '.hook_feedback' .gitignore 2>/dev/null || echo '.claude/.hook_feedback' >> .gitignore
 ```
 
-### 7단계: 정리
+### 9단계: 정리
 
 ```bash
 rm -rf "$DOTCLAUDE_TMP"
@@ -129,12 +258,12 @@ rm -rf "$DOTCLAUDE_TMP"
 설치 소스: https://github.com/leonardo204/dotclaude
 
 클린 설치:
-- .claude/agents/ (7개)
-- .claude/hooks/ (6개)
-- .claude/commands/ (5개)
-- .claude/db/ (init.sql, helper.sh)
+- .claude/agents/ (시스템 7개 + 프로젝트 고유 N개 보존)
+- .claude/hooks/ (시스템 6개 + 프로젝트 고유 N개 보존)
+- .claude/commands/ (시스템 5개 + 프로젝트 고유 N개 보존)
+- .claude/db/ (init.sql, helper.sh — context.db 유지)
 - .claude/scripts/ (context-monitor.mjs)
-- .claude/settings.json
+- .claude/settings.json (시스템 hooks + 프로젝트 고유 설정 머지)
 - CLAUDE.md (COMMON=최신, PROJECT=보존)
 
 다음 단계:
@@ -145,5 +274,7 @@ rm -rf "$DOTCLAUDE_TMP"
 ## 주의사항
 
 - **파일 내용을 절대 기억해서 작성하지 않는다** — 반드시 repo에서 복사
+- **클린 설치 전 반드시 충돌 영향 분석 → 사용자 확인**
 - context.db는 유지 (기존 세션 데이터 보존)
 - CLAUDE.md의 PROJECT 섹션은 반드시 보존
+- 프로젝트 고유 파일(시스템 파일명 외)은 절대 삭제하지 않는다
