@@ -20,9 +20,9 @@
 │   ├── post-tool-bash.sh     # PostToolUse:Bash: 에러 감지
 │   └── on-stop.sh            # Stop: 세션 통계 갱신
 ├── commands/
-│   ├── commit.md      # /project:commit
-│   ├── tellme.md      # /project:tellme
-│   └── discover.md    # /project:discover
+│   ├── dotclaude-commit.md      # /project:dotclaude-commit
+│   ├── dotclaude-tellme.md      # /project:dotclaude-tellme
+│   └── dotclaude-discover.md    # /project:dotclaude-discover
 └── settings.json      # Hook 등록
 ```
 
@@ -96,5 +96,5 @@ bash .claude/db/helper.sh <command> [args...]
 
 - DB 파일은 git에 포함됨
 - 작업 시작: SessionStart hook이 자동 checkin (pull + 시간 기록)
-- 작업 종료: `/project:commit`으로 DB 포함 push
+- 작업 종료: `/project:dotclaude-commit`으로 DB 포함 push
 - **규칙**: 항상 한쪽에서만 작업 → push → 다른 곳에서 pull → 작업

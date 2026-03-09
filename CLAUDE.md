@@ -104,7 +104,7 @@
 - 버그 발생 시: `debugger` 진단 → `ralph` 수정 (직접 사용 가능)
 - 강제 중단: "중단" 요청 시 즉시 중단 + 현재 상태 보고
 
-**자동 트리거 조건** — `/project:implement` 명시 실행뿐 아니라, 아래 조건 감지 시 자동으로 파이프라인을 제안하거나 실행:
+**자동 트리거 조건** — `/project:dotclaude-implement` 명시 실행뿐 아니라, 아래 조건 감지 시 자동으로 파이프라인을 제안하거나 실행:
 
 | 감지 패턴 | 예시 | 동작 |
 |-----------|------|------|
@@ -119,11 +119,12 @@
 
 | 명령어 | 설명 |
 |--------|------|
-| `/project:implement` | 전체 파이프라인 실행 (계획→설계→구현→검증→리뷰) |
-| `/project:commit` | 문서 업데이트 + 기능별 커밋 + 푸시 |
-| `/project:tellme` | 최근 작업 브리핑 + 다음 할 일 제안 |
-| `/project:discover` | DB 패턴 분석 → 자동화 제안 |
-| `/project:reportdb` | Context DB 전체 현황 리포트 |
+| `/project:dotclaude-help` | 명령어 및 에이전트 목록 표시 |
+| `/project:dotclaude-implement` | 전체 파이프라인 실행 (계획→설계→구현→검증→리뷰) |
+| `/project:dotclaude-commit` | 문서 업데이트 + 기능별 커밋 + 푸시 |
+| `/project:dotclaude-tellme` | 최근 작업 브리핑 + 다음 할 일 제안 |
+| `/project:dotclaude-discover` | DB 패턴 분석 → 자동화 제안 |
+| `/project:dotclaude-reportdb` | Context DB 전체 현황 리포트 |
 
 ### Setup (다른 PC에서 클론 후)
 
