@@ -140,10 +140,10 @@ Claude Code의 **Hook**은 특정 이벤트(세션 시작, 파일 편집, 응답
 ```mermaid
 flowchart LR
     A[세션 시작] --> B[session-start.sh<br/>DB 초기화 · 세션 기록]
-    C[매 턴] --> D[on-prompt.sh<br/>컨텍스트 주입 · compaction 복구]
-    E[파일 편집] --> F[post-tool-edit.sh<br/>편집 파일 DB 로깅]
-    G[Bash 실행] --> H[post-tool-bash.sh<br/>에러 자동 감지 + DB 기록]
-    I[응답 완료] --> J[on-stop.sh<br/>세션 통계 갱신]
+    C[매 턴] --> D[on-prompt.sh<br/>3단계 차등 주입 · compaction 복구]
+    E[파일 편집] --> F[post-tool-edit.sh<br/>편집 로깅 + working_files 캡처]
+    G[Bash 실행] --> H[post-tool-bash.sh<br/>에러 감지 + error_context 캡처]
+    I[응답 완료] --> J[on-stop.sh<br/>세션 통계 + session_summary 저장]
     I --> K[ralph-persist.sh<br/>미완료 시 중단 차단]
 ```
 
@@ -175,8 +175,24 @@ Hook이 자동으로 데이터를 기록하고, AI가 매 턴 참조합니다.
 ├─ errors        에러 발생 이력 (자동 분류)
 ├─ tool_usage    파일 편집 로그
 ├─ commits       커밋 기록
-└─ live_context  compaction 복구용 KV 저장소
+└─ live_context  compaction 복구용 KV 저장소 (자동 캡처 포함)
 ```
+
+**자동 캡처**: Hook이 `live_context`에 핵심 상태를 자동으로 기록합니다:
+
+| 키 | 캡처 시점 | 내용 |
+|----|-----------|------|
+| `working_files` | 파일 편집 시 | 편집된 파일 경로 목록 (중복 제거, 최대 20개) |
+| `error_context` | 에러 감지 시 | 최근 에러 타입 + 파일 경로 (최신 1건 덮어쓰기) |
+| `session_summary` | 세션 종료 시 | 편집 파일 수 + 파일 목록 요약 |
+
+**선택적 주입**: `on-prompt.sh`가 컨텍스트 상태에 따라 3단계로 차등 주입합니다:
+
+| 상태 | 주입 내용 |
+|------|-----------|
+| 기본 | 세션 ID + 편집 수 + 미완료 태스크 수 + DB 사용 힌트 |
+| `high` (ctx 70%+) | "상태 저장 권장" 경고 |
+| `compacted` | live_context 전체 + 최근 결정 5건 + pending tasks + 최근 에러 3건 |
 
 CLI 도구로 직접 조회/수정도 가능합니다:
 
@@ -187,6 +203,7 @@ bash .claude/db/helper.sh task-done 3                        # 태스크 완료
 bash .claude/db/helper.sh decision-add "JWT 인증 방식 채택"   # 결정 기록
 bash .claude/db/helper.sh stats                              # 전체 통계
 bash .claude/db/helper.sh live-set current_task "API 구현"    # 실시간 상태 저장
+bash .claude/db/helper.sh live-append working_files "src/main.ts" 20  # 리스트에 추가 (중복 제거)
 ```
 
 ### 📊 HUD Statusline

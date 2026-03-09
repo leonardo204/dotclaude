@@ -153,8 +153,9 @@ Agent(subagent_type: "general-purpose", prompt: "
 프로젝트별 `.claude/db/context.db`로 세션 간 작업 추적.
 
 - Helper: `bash .claude/db/helper.sh <command>`
-- 주요 명령: `ctx-get/set`, `task-add/list/done`, `decision-add`, `error-log`, `live-set/get/dump`, `stats`
+- 주요 명령: `ctx-get/set`, `task-add/list/done`, `decision-add`, `error-log`, `live-set/append/get/dump`, `stats`
 - 세션 시작 시 Hook이 자동으로 DB 초기화 + 세션 기록
+- **커밋 정책**: `context.db`는 휘발성 런타임 데이터 — `.gitignore`에 포함되어 git 미추적. 커밋 대상은 `init.sql`(스키마)과 `helper.sh`(CLI)만 해당
 
 ### Context Monitor (compaction 대응)
 
@@ -164,15 +165,18 @@ Agent(subagent_type: "general-purpose", prompt: "
 
 ### Live Context 관리
 
-매 턴 종료 시 `live-set`으로 핵심 상태 업데이트:
-- `current_task`, `working_files`, `key_findings`
+Hook이 자동으로 핵심 상태를 캡처한다:
+- `working_files` — 편집 파일 경로 (post-tool-edit.sh가 자동 추가)
+- `error_context` — 최근 에러 정보 (post-tool-bash.sh가 자동 덮어쓰기)
+- `session_summary` — 세션 편집 요약 (on-stop.sh가 자동 저장)
+- `current_task`, `key_findings` — 수동 저장 (`live-set`)
 
 ### Hooks (자동 실행)
 
 | Hook | 시점 | 역할 |
 |------|------|------|
 | session-start.sh | 세션 시작 | DB 초기화, 세션 기록, 미완료 태스크 표시 |
-| on-prompt.sh | 매 턴 | 컨텍스트 주입, compaction 복구 |
-| post-tool-edit.sh | 파일 편집 후 | 편집 파일 로깅 |
-| post-tool-bash.sh | Bash 실행 후 | 에러 자동 감지/로깅 |
-| on-stop.sh | 세션 종료 | 세션 통계 업데이트 |
+| on-prompt.sh | 매 턴 | 3단계 차등 주입 (기본/경고/복구), hook_feedback 릴레이 |
+| post-tool-edit.sh | 파일 편집 후 | 편집 파일 로깅 + working_files 자동 캡처 |
+| post-tool-bash.sh | Bash 실행 후 | 에러 감지/로깅 + error_context 자동 캡처 |
+| on-stop.sh | 세션 종료 | 세션 통계 업데이트 + session_summary 자동 저장 |
