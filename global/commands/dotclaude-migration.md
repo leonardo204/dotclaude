@@ -194,7 +194,63 @@ DB 없으면 생성, 있으면 유지:
 [ ! -f ".claude/db/context.db" ] && sqlite3 .claude/db/context.db < .claude/db/init.sql
 ```
 
-### 7단계: CLAUDE.md 재구성
+### 7단계: 문서 폴더 감지 + ref-docs 복사
+
+프로젝트의 기존 문서 폴더를 감지하여 ref-docs를 적절한 위치에 복사한다.
+
+#### 7-1. 문서 폴더 감지
+
+프로젝트 루트에서 일반적인 문서 폴더 패턴을 탐색:
+
+```bash
+DOC_DIRS=""
+for d in docs documentation Ref-docs doc wiki; do
+    [ -d "$d" ] && DOC_DIRS="$DOC_DIRS $d"
+done
+```
+
+#### 7-2. 사용자 확인 및 경로 결정
+
+감지 결과에 따라 분기:
+
+**여러 개 발견 시:**
+```
+문서 폴더가 여러 개 발견되었습니다:
+1. docs/
+2. Ref-docs/
+
+ref-docs 파일을 복사할 폴더를 선택하세요 (번호):
+```
+사용자가 선택한 폴더를 `$DOC_ROOT`로 설정.
+
+**하나만 발견 시:**
+```
+기존 문서 폴더를 발견했습니다: docs/
+이 폴더에 ref-docs를 복사할까요? (Y/N)
+- Y: docs/claude/ 에 복사
+- N: Ref-docs/claude/ 에 새로 생성
+```
+
+**없으면:**
+```
+기존 문서 폴더가 없습니다. Ref-docs/claude/에 생성합니다.
+```
+`$DOC_ROOT`를 `Ref-docs`로 설정.
+
+#### 7-3. ref-docs 파일 복사
+
+dotclaude repo의 `ref-docs/` 에서 감지된 문서 폴더의 `claude/` 서브폴더로 복사:
+
+```bash
+DOC_ROOT="{감지/선택된 폴더}"  # 예: docs, Ref-docs 등
+mkdir -p "$DOC_ROOT/claude"
+cp "$DOTCLAUDE_TMP/ref-docs/context-db.md" "$DOC_ROOT/claude/"
+cp "$DOTCLAUDE_TMP/ref-docs/context-monitor.md" "$DOC_ROOT/claude/"
+cp "$DOTCLAUDE_TMP/ref-docs/conventions.md" "$DOC_ROOT/claude/"
+cp "$DOTCLAUDE_TMP/ref-docs/setup.md" "$DOC_ROOT/claude/"
+```
+
+### 8단계: CLAUDE.md 재구성
 
 #### 기존 CLAUDE.md가 없는 경우
 
@@ -233,7 +289,24 @@ cp "$SRC/CLAUDE.md" CLAUDE.md
 
 초안을 사용자에게 보여주고 확인.
 
-### 8단계: .gitignore 업데이트
+#### CLAUDE.md 경로 치환
+
+`$DOC_ROOT`가 `Ref-docs`가 아닌 경우, CLAUDE.md 내의 ref-docs 경로를 치환:
+
+```bash
+if [ "$DOC_ROOT" != "Ref-docs" ]; then
+    sed -i '' "s|Ref-docs/claude/|${DOC_ROOT}/claude/|g" CLAUDE.md
+fi
+```
+
+이렇게 하면 CLAUDE.md 내의 모든 참조 경로가 실제 문서 위치와 일치하게 된다:
+- `Ref-docs/claude/conventions.md` → `{DOC_ROOT}/claude/conventions.md`
+- `Ref-docs/claude/context-db.md` → `{DOC_ROOT}/claude/context-db.md`
+- `Ref-docs/claude/context-monitor.md` → `{DOC_ROOT}/claude/context-monitor.md`
+- `Ref-docs/claude/setup.md` → `{DOC_ROOT}/claude/setup.md`
+- `Ref-docs/claude/` (별도 문서 위치) → `{DOC_ROOT}/claude/`
+
+### 9단계: .gitignore 업데이트
 
 ```bash
 grep -q 'context.db' .gitignore 2>/dev/null || echo -e '\n# Claude Code runtime\n.claude/db/context.db' >> .gitignore
@@ -244,7 +317,7 @@ grep -q '.hud_cache' .gitignore 2>/dev/null || echo '.claude/.hud_cache' >> .git
 grep -q '.hook_feedback' .gitignore 2>/dev/null || echo '.claude/.hook_feedback' >> .gitignore
 ```
 
-### 9단계: 정리
+### 10단계: 정리
 
 ```bash
 rm -rf "$DOTCLAUDE_TMP"
@@ -264,7 +337,8 @@ rm -rf "$DOTCLAUDE_TMP"
 - .claude/db/ (init.sql, helper.sh — context.db 유지)
 - .claude/scripts/ (context-monitor.mjs)
 - .claude/settings.json (시스템 hooks + 프로젝트 고유 설정 머지)
-- CLAUDE.md (COMMON=최신, PROJECT=보존)
+- {DOC_ROOT}/claude/ (ref-docs 4개 — context-db, context-monitor, conventions, setup)
+- CLAUDE.md (COMMON=최신, PROJECT=보존, ref-docs 경로 치환 완료)
 
 다음 단계:
 1. CLAUDE.md PROJECT 섹션 확인
