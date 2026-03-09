@@ -405,12 +405,10 @@ async function main() {
     updateCtxState(cwd, percent);
     parts.push(renderContext(percent));
 
-    // 6. Agent count (active/total)
-    const { active, total } = countSubagents(stdin.session_id);
-    if (total > 0) {
-      const color = active > 0 ? C.yellow : C.dim;
-      parts.push(`${color}agents:${active}/${total}${C.reset}`);
-    }
+    // 6. Agent count (active only, always shown)
+    const { active } = countSubagents(stdin.session_id);
+    const agentColor = active > 0 ? C.yellow : C.dim;
+    parts.push(`${agentColor}agents:${active}${C.reset}`);
 
     // Output
     console.log(parts.join(` ${C.dim}|${C.reset} `));
