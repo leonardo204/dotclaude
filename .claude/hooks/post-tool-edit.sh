@@ -24,6 +24,9 @@ if [ -n "$FILE_PATH" ]; then
     # 로깅
     sqlite3 "$DB_PATH" "INSERT INTO tool_usage (session_id, tool_name, file_path) VALUES ($SESSION_ID, 'Edit', '$REL_PATH');" 2>/dev/null
 
+    # working_files에 자동 캡처
+    bash "$PROJECT_ROOT/.claude/db/helper.sh" live-append working_files "$REL_PATH" 20
+
     # PostToolUse stdout은 verbose 모드에서만 보이므로, 피드백을 파일에 축적
     FEEDBACK_FILE="$PROJECT_ROOT/.claude/.hook_feedback"
     echo "[post-edit] DB 저장: 편집 기록 → $REL_PATH" >> "$FEEDBACK_FILE"

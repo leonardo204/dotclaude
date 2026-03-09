@@ -116,6 +116,27 @@ case "$CMD" in
         # helper.sh live-dump (formatted for context injection)
         sqlite3 "$DB_PATH" "SELECT '- ' || key || ': ' || value FROM live_context ORDER BY key;" 2>/dev/null
         ;;
+    live-append)
+        # helper.sh live-append <key> <value> [limit]
+        # 줄바꿈 구분 리스트에 중복 없이 추가, 최근 N개 제한
+        KEY="${1//\'/\'\'}"
+        VALUE="${2//\'/\'\'}"
+        LIMIT="${3:-20}"
+        sqlite3 "$DB_PATH" "CREATE TABLE IF NOT EXISTS live_context (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime')));"
+        EXISTING=$(sqlite3 "$DB_PATH" "SELECT value FROM live_context WHERE key='$KEY';" 2>/dev/null)
+        if [ -n "$EXISTING" ]; then
+            # 중복 확인
+            if echo "$EXISTING" | grep -Fxq "$VALUE"; then
+                exit 0
+            fi
+            # 추가 후 최근 N개만 유지
+            UPDATED=$(printf '%s\n%s' "$EXISTING" "$VALUE" | tail -n "$LIMIT")
+            UPDATED_ESC="${UPDATED//\'/\'\'}"
+            sqlite3 "$DB_PATH" "INSERT OR REPLACE INTO live_context (key, value, updated_at) VALUES ('$KEY', '$UPDATED_ESC', datetime('now','localtime'));"
+        else
+            sqlite3 "$DB_PATH" "INSERT OR REPLACE INTO live_context (key, value, updated_at) VALUES ('$KEY', '$VALUE', datetime('now','localtime'));"
+        fi
+        ;;
     live-clear)
         sqlite3 "$DB_PATH" "DELETE FROM live_context;" 2>/dev/null
         echo "Live context cleared."
@@ -168,6 +189,7 @@ case "$CMD" in
         echo "  commit-log <hash> <msg> Log commit"
         echo "  tool-log <tool> <file>  Log tool usage"
         echo "  live-set <key> <val>    Set live context (compaction-safe)"
+        echo "  live-append <key> <val> [limit] Append to live context list (dedup, default limit 20)"
         echo "  live-get [key]          Get live context"
         echo "  live-dump               Dump all live context"
         echo "  live-clear              Clear live context"
