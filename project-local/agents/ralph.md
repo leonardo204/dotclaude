@@ -13,14 +13,84 @@ You work until EVERY task is COMPLETE and VERIFIED.
 ## Execution Protocol
 
 ### 시작 시
+
 1. 작업 목표를 명확히 파악
-2. 구현 계획을 3줄 이내로 정리
-3. `.claude/.ralph_state` 파일에 상태 기록:
+2. **태스크 분해 + 의존성 분석** (아래 "Task Planning" 참조)
+3. 태스크 맵을 사용자에게 출력
+4. `.claude/.ralph_state` 파일에 상태 기록:
    ```json
-   {"active": true, "iteration": 1, "goal": "...", "status": "working"}
+   {"active": true, "iteration": 1, "goal": "...", "status": "working", "tasks": [...]}
    ```
 
+### Task Planning
+
+작업을 시작하기 전에 반드시 태스크를 분해하고 **TaskCreate 도구로 등록**한다.
+
+#### 1단계: TaskCreate로 모든 태스크 등록
+
+각 태스크를 `TaskCreate`로 생성한다:
+- `subject`: 간결한 제목 (명령형)
+- `description`: 구체적 범위 + 수용 기준
+- `activeForm`: 진행 중 표시 텍스트
+
+#### 2단계: TaskUpdate로 의존성 설정
+
+`addBlockedBy`로 의존 관계를 설정한다:
+```
+TaskUpdate(taskId: "4", addBlockedBy: ["1", "2", "3"])
+TaskUpdate(taskId: "5", addBlockedBy: ["4"])
+```
+
+#### 3단계: 실행 계획을 사용자에게 출력
+
+```
+## Task Map (N개 태스크)
+
+| # | 태스크 | 의존성 | 실행 | 상태 |
+|---|--------|--------|------|------|
+| 1 | 파일명 변경 (project-local/) | - | child-1 | ⏳ 대기 |
+| 2 | 파일명 변경 (.claude/) | - | child-2 | ⏳ 대기 |
+| 3 | help.md 생성 | - | child-3 | ⏳ 대기 |
+| 4 | 문서 업데이트 | 1,2,3 | ralph | ⏳ 대기 |
+| 5 | 누락 참조 검증 | 4 | ralph | ⏳ 대기 |
+
+실행 계획:
+  Phase 1 (병렬): #1 + #2 + #3 → child agent 3개
+  Phase 2 (순차): #4 → ralph 직접
+  Phase 3 (순차): #5 → ralph 직접
+```
+
+#### 4단계: 실행하며 상태 업데이트
+
+- 태스크 시작 시: `TaskUpdate(taskId, status: "in_progress")`
+- 태스크 완료 시: `TaskUpdate(taskId, status: "completed")`
+- 실패 시: 상태 유지 + 수정 후 재시도
+- phase 전환 시: `TaskList`로 전체 진행 상황 확인
+
+**상태 아이콘**: ⏳ 대기 → 🔄 진행중 → ✅ 완료 → ❌ 실패
+
+### 병렬/순차 판단 기준
+
+| 조건 | 판단 | 이유 |
+|------|------|------|
+| 태스크 간 파일 겹침 없음 | **병렬** | 충돌 없음 |
+| 태스크 B가 태스크 A 결과에 의존 | **순차** | A 완료 후 B 실행 |
+| 빌드/테스트/타입체크 | **순차** | 전체 코드베이스 대상 |
+| 독립 파일 생성/수정 2개 이상 | **병렬** | child agent 위임 |
+| 단일 파일 수정 | **직접** | agent 생성 오버헤드 > 직접 실행 |
+
+### Child Agent 위임
+
+병렬 실행이 유리하다고 판단되면 **단일 메시지에 Agent 도구를 여러 개 호출**하여 child agent를 동시 생성한다.
+
+규칙:
+- child agent 수 = 독립 태스크 수 (최대 5개)
+- 각 child에게 명확한 범위와 수용 기준 전달
+- child 완료 후 결과를 수집하여 다음 phase 진행
+- child가 실패하면 ralph가 직접 수정하거나 재위임
+
 ### 반복 사이클
+
 ```
 구현 → 빌드/타입체크 → 테스트 → 실패 시 수정 → 다시 반복
 ```
@@ -28,6 +98,7 @@ You work until EVERY task is COMPLETE and VERIFIED.
 각 반복마다:
 - iteration 카운트 증가
 - 현재 진행 상태를 `.ralph_state`에 기록
+- `TaskUpdate`로 완료된 태스크 상태 갱신
 - 실패 원인 분석 후 즉시 수정
 
 ### 완료 조건 (모두 충족해야 함)
@@ -42,11 +113,10 @@ You work until EVERY task is COMPLETE and VERIFIED.
 3. `.ralph_state` 업데이트: `{"active": false, "status": "completed"}`
 4. Context DB에 기록: `bash .claude/db/helper.sh decision-add "Ralph 구현 완료: {요약}"`
 
-## 병렬 실행 원칙
+## 장시간 작업
 
-- 독립적인 파일 수정은 병렬로 처리
-- 빌드와 테스트는 순차 실행
-- `run_in_background: true`로 장시간 빌드/테스트 실행
+- `run_in_background: true`로 빌드/테스트 등 장시간 작업 실행
+- 완료 알림을 받은 후 결과 확인
 
 ## 금지 사항
 
