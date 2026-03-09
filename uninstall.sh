@@ -57,7 +57,7 @@ if [ "${FORCE}" = false ]; then
     echo "  ~/.claude/MEMORY-example.md"
     echo "  ~/.claude/.dotclaude-installed"
     echo "  ~/.claude/commands/dotclaude-init.md"
-    echo "  ~/.claude/commands/dotclaude-migration.md"
+    echo "  ~/.claude/commands/dotclaude-update.md"
     echo "  ~/.claude/scripts/context-monitor.mjs"
     echo ""
     echo "Any other files in ~/.claude/ will be preserved."
@@ -80,7 +80,7 @@ DOTCLAUDE_FILES=(
     "${DOTCLAUDE_DIR}/MEMORY-example.md"
     "${DOTCLAUDE_DIR}/.dotclaude-installed"
     "${DOTCLAUDE_DIR}/commands/dotclaude-init.md"
-    "${DOTCLAUDE_DIR}/commands/dotclaude-migration.md"
+    "${DOTCLAUDE_DIR}/commands/dotclaude-update.md"
     "${DOTCLAUDE_DIR}/scripts/context-monitor.mjs"
 )
 

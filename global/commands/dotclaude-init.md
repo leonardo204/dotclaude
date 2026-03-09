@@ -16,9 +16,7 @@
    ls -la .claude/ 2>/dev/null
    ```
 
-3. 이미 존재하면 사용자에게 확인:
-   - 기존 설정이 있다면 `/dotclaude-migration` 사용 권장
-   - 강제 초기화 원할 시 백업 후 진행
+3. 이미 존재하면 **충돌 영향 분석 후 진행** (아래 "기존 .claude/ 감지 시 처리" 참조)
 
 ## 실행 순서
 
@@ -30,6 +28,116 @@ git clone --depth 1 https://github.com/leonardo204/dotclaude.git "$DOTCLAUDE_TMP
 ```
 
 클론 실패 시 사용자에게 안내하고 중단. 이후 모든 파일은 `$DOTCLAUDE_TMP/project-local/`에서 복사한다.
+
+### 1-A단계: 기존 .claude/ 감지 시 처리
+
+`.claude/` 폴더가 이미 존재하면, 클린 설치 전에 충돌 영향 분석을 수행한다.
+
+```bash
+SRC="$DOTCLAUDE_TMP/project-local"
+```
+
+#### 커스터마이징 감지
+
+시스템 파일과 동일 이름이지만 내용이 변경된 파일을 찾는다:
+
+```bash
+# 시스템 에이전트 중 프로젝트에서 커스터마이징한 것
+for f in "$SRC"/agents/*.md; do
+    name=$(basename "$f")
+    if [ -f ".claude/agents/$name" ]; then
+        if ! diff -q "$f" ".claude/agents/$name" >/dev/null 2>&1; then
+            echo "[변경됨] agents/$name"
+        fi
+    fi
+done
+
+# 시스템 hook 중 프로젝트에서 커스터마이징한 것
+for f in "$SRC"/hooks/*.sh; do
+    name=$(basename "$f")
+    if [ -f ".claude/hooks/$name" ]; then
+        if ! diff -q "$f" ".claude/hooks/$name" >/dev/null 2>&1; then
+            echo "[변경됨] hooks/$name"
+        fi
+    fi
+done
+
+# 시스템 command 중 프로젝트에서 커스터마이징한 것
+for f in "$SRC"/commands/*.md; do
+    name=$(basename "$f")
+    if [ -f ".claude/commands/$name" ]; then
+        if ! diff -q "$f" ".claude/commands/$name" >/dev/null 2>&1; then
+            echo "[변경됨] commands/$name"
+        fi
+    fi
+done
+```
+
+#### 프로젝트 고유 파일 식별
+
+```bash
+SYS_AGENTS="ralph planner architect verifier reviewer debugger test-engineer"
+for f in .claude/agents/*.md; do
+    name=$(basename "$f" .md)
+    if ! echo "$SYS_AGENTS" | grep -qw "$name"; then
+        echo "[프로젝트 고유] agents/$name.md"
+    fi
+done
+
+SYS_HOOKS="session-start on-prompt post-tool-edit post-tool-bash on-stop ralph-persist"
+for f in .claude/hooks/*.sh; do
+    name=$(basename "$f" .sh)
+    if ! echo "$SYS_HOOKS" | grep -qw "$name"; then
+        echo "[프로젝트 고유] hooks/$name.sh"
+    fi
+done
+
+SYS_CMDS="implement commit tellme discover reportdb"
+for f in .claude/commands/*.md; do
+    name=$(basename "$f" .md)
+    if ! echo "$SYS_CMDS" | grep -qw "$name"; then
+        echo "[프로젝트 고유] commands/$name.md"
+    fi
+done
+```
+
+#### settings.json 충돌 분석
+
+```bash
+cat .claude/settings.json 2>/dev/null
+cat "$SRC/settings.json"
+```
+
+비교 항목:
+- **hooks 외 설정** (statusLine, enabledPlugins, permissions 등): 교체 시 유실됨
+- **프로젝트 고유 hook 등록**: 시스템 settings.json에 없는 hook event나 matcher
+
+#### 사용자에게 영향 리포트
+
+```
+## 기존 .claude/ 감지 — 충돌 영향 분석
+
+### 커스터마이징된 시스템 파일 (초기화 시 변경사항 유실)
+- agents/reviewer.md — 프로젝트 맞춤 리뷰 기준 포함
+(없으면: "커스터마이징 없음")
+
+### 프로젝트 고유 파일 (영향 없음 — 보존됨)
+- agents/data-analyst.md
+(없으면: "프로젝트 고유 파일 없음")
+
+### settings.json 프로젝트 고유 설정 (교체 시 유실)
+- enabledPlugins: {...}
+(없으면: "프로젝트 고유 설정 없음")
+
+### 권장 조치
+- [자동] 프로젝트 고유 파일은 그대로 보존됩니다
+- [확인 필요] 커스터마이징된 시스템 파일 N개가 repo 버전으로 교체됩니다
+- [확인 필요] settings.json의 프로젝트 고유 설정을 머지해야 합니다
+
+진행할까요? (Y: 전체 진행 / N: 중단)
+```
+
+사용자 승인 후 아래 단계를 계속 진행한다. 중단 선택 시 `/dotclaude-update`를 안내한다.
 
 ### 2단계: 디렉토리 구조 생성
 

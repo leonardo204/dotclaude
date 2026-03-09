@@ -1,4 +1,4 @@
-기존 프로젝트를 dotclaude 시스템으로 마이그레이션 / 시스템 파일 클린 재설치
+dotclaude 시스템 파일을 최신 버전으로 업데이트 / 시스템 파일 클린 재설치
 
 ## 핵심 원칙
 
@@ -325,7 +325,7 @@ rm -rf "$DOTCLAUDE_TMP"
 ## 완료 메시지
 
 ```
-## 마이그레이션 완료
+## 업데이트 완료
 
 설치 소스: https://github.com/leonardo204/dotclaude
 

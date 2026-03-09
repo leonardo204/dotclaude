@@ -13,6 +13,13 @@ dotclaude 시스템 도움말을 출력합니다.
 | `/project:dotclaude-discover` | Context DB 패턴 분석 → 자동화 가능한 패턴 발견 |
 | `/project:dotclaude-reportdb` | Context DB 전체 현황 리포트 |
 
+## dotclaude 글로벌 명령어
+
+| 명령어 | 설명 |
+|--------|------|
+| `/dotclaude-init` | 프로젝트에 dotclaude 환경 초기화 |
+| `/dotclaude-update` | dotclaude 시스템 파일 최신 업데이트 |
+
 ## dotclaude 에이전트
 
 | 에이전트 | 설명 |

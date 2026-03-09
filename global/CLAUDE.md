@@ -39,7 +39,7 @@ Context7 MCP 사용 가능 시: `resolve-library-id` → `query-docs` 순서로 
 | 파일 3개 이상 읽기/수정 필요 | `general-purpose` | 컨텍스트 보호 |
 | 멀티스텝 실행 (5단계 이상) | `general-purpose` | 자율 실행이 효율적 |
 | 복잡한 기능 구현 (아래 자동 감지) | 구현 파이프라인 | 다중 에이전트 협업 |
-| `/dotclaude-init`, `/dotclaude-migration` | `general-purpose` | repo 클론+파일 복사+검증 |
+| `/dotclaude-init`, `/dotclaude-update` | `general-purpose` | repo 클론+파일 복사+검증 |
 | 코드베이스 구조 파악 | `Explore` | 탐색 특화 |
 | 독립 작업 2개 이상 동시 | Agent 병렬 생성 | 처리량 극대화 |
 | 빌드/테스트/설치 등 장시간 | Agent (`run_in_background`) | 블로킹 방지 |
@@ -129,10 +129,10 @@ Context7 MCP 사용 가능 시: `resolve-library-id` → `query-docs` 순서로 
 - Context DB, Hooks, Commands, HUD 템플릿 자동 생성
 - 이후 CLAUDE.md의 PROJECT 섹션을 프로젝트에 맞게 작성
 
-### 기존 프로젝트 마이그레이션 (`/dotclaude-migration`)
+### 기존 프로젝트 업데이트 (`/dotclaude-update`)
 - 이미 `.claude/`나 CLAUDE.md가 있는 프로젝트에서 실행
-- 기존 설정 백업 후 시스템 구성요소 머지 (기존 hook/command 보존)
-- CLAUDE.md를 COMMON + PROJECT 구조로 재구성 (상세 내용은 Ref-docs로 분리)
+- 충돌 영향 분석 후 시스템 파일을 최신으로 클린 교체 (프로젝트 고유 파일 보존)
+- CLAUDE.md의 PROJECT 섹션 보존
 
 ---
 

@@ -54,7 +54,7 @@ cp -r global/* ~/.claude/
 cd my-project && git init
 claude
 > /dotclaude-init        # 새 프로젝트
-> /dotclaude-migration   # 기존 프로젝트
+> /dotclaude-update      # 기존 프로젝트
 ```
 
 이 명령을 실행하면 프로젝트 `.claude/` 폴더에 아래가 자동 생성됩니다:
@@ -226,6 +226,13 @@ Claude Code의 **Commands**는 `.claude/commands/` 폴더에 마크다운 파일
 | `/project:dotclaude-discover` | DB 패턴 분석 → 자동화 제안 |
 | `/project:dotclaude-reportdb` | Context DB 전체 현황 리포트 |
 
+**글로벌 명령어** (글로벌 설치 시 모든 프로젝트에서 사용 가능):
+
+| 명령어 | 설명 |
+|--------|------|
+| `/dotclaude-init` | 프로젝트에 dotclaude 환경 초기화 |
+| `/dotclaude-update` | dotclaude 시스템 파일 최신 업데이트 |
+
 ---
 
 ## 폴더 구조
@@ -239,7 +246,7 @@ dotclaude/
 │   ├── settings.json                  # statusline + 플러그인 설정
 │   ├── commands/                      # 글로벌 명령어
 │   │   ├── dotclaude-init.md          #   /dotclaude-init (새 프로젝트)
-│   │   └── dotclaude-migration.md     #   /dotclaude-migration (기존 프로젝트)
+│   │   └── dotclaude-update.md        #   /dotclaude-update (기존 프로젝트)
 │   ├── scripts/
 │   │   └── context-monitor.mjs        #   HUD statusline 스크립트
 │   └── MEMORY-example.md             # 자동 메모리 예시
@@ -280,11 +287,11 @@ claude                    # Claude Code 실행
 ### 기존 프로젝트 전환
 
 ```
-> /dotclaude-migration     # 기존 설정 백업 + 머지
+> /dotclaude-update        # 기존 설정 분석 + 최신 업데이트
 ```
 
-- 기존 `.claude/` 설정을 `.claude/.backup-{timestamp}/`에 백업
-- 기존 hooks/commands 보존하며 시스템 구성 요소 머지
+- 충돌 영향 분석 (커스터마이징 감지, 프로젝트 고유 파일 식별, settings.json 분석)
+- 시스템 파일을 repo 최신으로 클린 교체 (프로젝트 고유 파일 보존)
 - 기존 `CLAUDE.md`의 PROJECT 섹션을 보존하고 글로벌 참조 안내를 추가 (공통 규칙은 `~/.claude/CLAUDE.md`에서 로드)
 
 ### 일상 작업 흐름
