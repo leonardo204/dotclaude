@@ -317,26 +317,36 @@ function shortenCwd(cwd) {
   return cwd;
 }
 
-// ── Subagent count ──
+// ── Subagent count (active / total) ──
 function countSubagents(sessionId) {
-  if (!sessionId) return 0;
+  if (!sessionId) return { active: 0, total: 0 };
   const home = homedir();
-  // Search for subagent transcript files
   const projectsDir = join(home, ".claude", "projects");
   try {
-    if (!existsSync(projectsDir)) return 0;
-    // Walk project dirs to find session subagents
+    if (!existsSync(projectsDir)) return { active: 0, total: 0 };
     for (const proj of readdirSync(projectsDir)) {
       const sessionDir = join(projectsDir, proj, sessionId, "subagents");
       if (existsSync(sessionDir)) {
-        const files = readdirSync(sessionDir).filter((f) =>
-          f.startsWith("agent-")
+        const transcripts = readdirSync(sessionDir).filter(
+          (f) => f.startsWith("agent-") && f.endsWith(".jsonl")
         );
-        return files.length;
+        let active = 0;
+        for (const f of transcripts) {
+          try {
+            const content = readFileSync(join(sessionDir, f), "utf8").trim();
+            const lastLine = content.split("\n").pop();
+            const last = JSON.parse(lastLine);
+            if (!last?.message?.stop_reason) active++;
+          } catch {
+            // If we can't read/parse, assume active
+            active++;
+          }
+        }
+        return { active, total: transcripts.length };
       }
     }
   } catch {}
-  return 0;
+  return { active: 0, total: 0 };
 }
 
 // ── Context % rendering ──
@@ -395,10 +405,11 @@ async function main() {
     updateCtxState(cwd, percent);
     parts.push(renderContext(percent));
 
-    // 6. Agent count
-    const agentCount = countSubagents(stdin.session_id);
-    if (agentCount > 0) {
-      parts.push(`${C.dim}agents:${agentCount}${C.reset}`);
+    // 6. Agent count (active/total)
+    const { active, total } = countSubagents(stdin.session_id);
+    if (total > 0) {
+      const color = active > 0 ? C.yellow : C.dim;
+      parts.push(`${color}agents:${active}/${total}${C.reset}`);
     }
 
     // Output
