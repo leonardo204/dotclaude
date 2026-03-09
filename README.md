@@ -19,42 +19,45 @@
 
 ---
 
-## 빠른 시작
+## 설치
 
-### 1. 글로벌 설정 (최초 1회)
+### 원라인 설치 (추천)
 
 ```bash
-# 이 저장소 클론
+curl -fsSL https://raw.githubusercontent.com/leonardo204/dotclaude/main/install.sh | bash
+```
+
+기존 `~/.claude/` 설정이 있으면 `~/.claude.pre-dotclaude/`로 자동 백업됩니다.
+
+### 수동 설치
+
+```bash
 git clone https://github.com/leonardo204/dotclaude.git
 cd dotclaude
-
-# 글로벌 파일 배치
-cp global/CLAUDE.md ~/.claude/CLAUDE.md
-mkdir -p ~/.claude/commands ~/.claude/scripts
-cp global/commands/*.md ~/.claude/commands/
-cp global/scripts/context-monitor.mjs ~/.claude/scripts/
+bash install.sh
 ```
 
-`~/.claude/settings.json`에 statusLine 추가 (기존 설정 유지):
-```json
-{
-  "statusLine": {
-    "type": "command",
-    "command": "node ~/.claude/scripts/context-monitor.mjs",
-    "padding": 2
-  }
-}
-```
-
-### 2. 프로젝트에 적용
+또는 직접 파일을 복사할 수도 있습니다:
 
 ```bash
-# 새 프로젝트 폴더에서 Claude Code 실행 후:
-/dotclaude-init        # 새 프로젝트
-/dotclaude-migration   # 기존 프로젝트
+git clone https://github.com/leonardo204/dotclaude.git
+cd dotclaude
+mkdir -p ~/.claude/commands ~/.claude/scripts
+cp -r global/* ~/.claude/
 ```
 
-이 명령을 실행하면 `.claude/` 폴더에 아래가 자동 생성됩니다:
+`~/.claude/settings.json`에 statusLine이 포함되어 있습니다. 기존 settings.json이 있었다면 백업에서 필요한 설정을 머지하세요.
+
+### 설치 후 프로젝트 적용
+
+```bash
+cd my-project && git init
+claude
+> /dotclaude-init        # 새 프로젝트
+> /dotclaude-migration   # 기존 프로젝트
+```
+
+이 명령을 실행하면 프로젝트 `.claude/` 폴더에 아래가 자동 생성됩니다:
 
 ```
 .claude/
@@ -64,6 +67,21 @@ cp global/scripts/context-monitor.mjs ~/.claude/scripts/
 ├── db/          ← SQLite DB + CLI 도구
 └── scripts/     ← HUD statusline
 ```
+
+---
+
+## 제거
+
+```bash
+# 로컬 실행 (확인 프롬프트 표시)
+bash uninstall.sh
+
+# 원격 실행 (-y 필수)
+curl -fsSL https://raw.githubusercontent.com/leonardo204/dotclaude/main/uninstall.sh | bash -s -- -y
+```
+
+dotclaude가 설치한 파일만 삭제하며, 사용자가 추가한 파일은 보존됩니다.
+백업(`~/.claude.pre-dotclaude/`)이 있으면 복원 방법을 안내합니다.
 
 ---
 
@@ -223,6 +241,8 @@ Claude Code의 **Commands**는 `.claude/commands/` 폴더에 마크다운 파일
 
 ```
 dotclaude/
+├── install.sh                         ← 원라인 글로벌 설치 스크립트
+├── uninstall.sh                       ← 글로벌 설정 제거 스크립트
 ├── global/                            ← ~/.claude/ 에 배치하는 글로벌 설정
 │   ├── CLAUDE.md                      # 글로벌 개발 가이드
 │   ├── settings.json                  # statusline + 플러그인 설정
