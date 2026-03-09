@@ -26,45 +26,132 @@ BACKUP_BASE="${HOME}/.claude.pre-dotclaude"
 # ─── Step 1: Check dependencies ───
 info "Checking dependencies..."
 
+# Detect OS and package manager
+OS="$(uname)"
+PKG_MGR=""
+if [[ "${OS}" == "Darwin" ]]; then
+    command -v brew &>/dev/null && PKG_MGR="brew"
+elif command -v apt-get &>/dev/null; then
+    PKG_MGR="apt"
+elif command -v yum &>/dev/null; then
+    PKG_MGR="yum"
+elif command -v pacman &>/dev/null; then
+    PKG_MGR="pacman"
+elif command -v apk &>/dev/null; then
+    PKG_MGR="apk"
+fi
+
+# Helper: install a package via detected package manager
+pkg_install() {
+    local pkg="$1"
+    local apt_pkg="${2:-$1}"
+    local brew_pkg="${3:-$1}"
+
+    case "${PKG_MGR}" in
+        brew)   brew install "${brew_pkg}" ;;
+        apt)    sudo apt-get update -qq && sudo apt-get install -y -qq "${apt_pkg}" ;;
+        yum)    sudo yum install -y "${apt_pkg}" ;;
+        pacman) sudo pacman -S --noconfirm "${apt_pkg}" ;;
+        apk)    sudo apk add "${apt_pkg}" ;;
+        *)
+            error "No supported package manager found. Install '${pkg}' manually."
+            exit 1
+            ;;
+    esac
+}
+
+# Helper: add a path to shell profile if not already present
+ensure_in_path() {
+    local dir="$1"
+    if [[ ":${PATH}:" != *":${dir}:"* ]]; then
+        export PATH="${dir}:${PATH}"
+        # Persist to shell profile
+        local profile=""
+        if [ -f "${HOME}/.zshrc" ]; then
+            profile="${HOME}/.zshrc"
+        elif [ -f "${HOME}/.bashrc" ]; then
+            profile="${HOME}/.bashrc"
+        elif [ -f "${HOME}/.profile" ]; then
+            profile="${HOME}/.profile"
+        fi
+        if [ -n "${profile}" ]; then
+            if ! grep -qF "${dir}" "${profile}" 2>/dev/null; then
+                echo "" >> "${profile}"
+                echo "# Added by dotclaude installer" >> "${profile}"
+                echo "export PATH=\"${dir}:\${PATH}\"" >> "${profile}"
+                info "Added ${dir} to PATH in ${profile}"
+            fi
+        fi
+    fi
+}
+
+# --- git ---
 if ! command -v git &>/dev/null; then
     error "git is required but not installed."
     error "Install git first: https://git-scm.com/downloads"
     exit 1
 fi
-
 ok "git found: $(git --version)"
 
+# --- sqlite3 ---
 if ! command -v sqlite3 &>/dev/null; then
-    warn "sqlite3 is required but not installed. Attempting to install..."
-    if [[ "$(uname)" == "Darwin" ]]; then
-        if command -v brew &>/dev/null; then
-            brew install sqlite3
-        else
-            error "Homebrew not found. Install sqlite3 manually: brew install sqlite3"
-            exit 1
+    warn "sqlite3 not found. Installing..."
+    pkg_install sqlite3 sqlite3 sqlite3
+    # Homebrew sqlite3 is keg-only on macOS — add to PATH
+    if [[ "${OS}" == "Darwin" ]] && [[ "${PKG_MGR}" == "brew" ]]; then
+        SQLITE_PREFIX="$(brew --prefix sqlite3 2>/dev/null || true)"
+        if [ -n "${SQLITE_PREFIX}" ] && [ -d "${SQLITE_PREFIX}/bin" ]; then
+            ensure_in_path "${SQLITE_PREFIX}/bin"
         fi
-    elif command -v apt-get &>/dev/null; then
-        sudo apt-get update -qq && sudo apt-get install -y -qq sqlite3
-    elif command -v yum &>/dev/null; then
-        sudo yum install -y sqlite
-    elif command -v pacman &>/dev/null; then
-        sudo pacman -S --noconfirm sqlite
-    elif command -v apk &>/dev/null; then
-        sudo apk add sqlite
-    else
-        error "Could not detect package manager. Install sqlite3 manually."
-        exit 1
     fi
-
-    if command -v sqlite3 &>/dev/null; then
-        ok "sqlite3 installed successfully."
-    else
+    if ! command -v sqlite3 &>/dev/null; then
         error "sqlite3 installation failed."
         exit 1
     fi
+    ok "sqlite3 installed successfully."
 fi
-
 ok "sqlite3 found: $(sqlite3 --version | cut -d' ' -f1)"
+
+# --- node ---
+if ! command -v node &>/dev/null; then
+    warn "Node.js not found. Installing..."
+    if [[ "${OS}" == "Darwin" ]] && [[ "${PKG_MGR}" == "brew" ]]; then
+        brew install node
+    elif [[ "${PKG_MGR}" == "apt" ]]; then
+        # Use NodeSource LTS for a recent version
+        if ! command -v curl &>/dev/null; then
+            sudo apt-get update -qq && sudo apt-get install -y -qq curl
+        fi
+        curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
+        sudo apt-get install -y -qq nodejs
+    elif [[ "${PKG_MGR}" == "yum" ]]; then
+        if ! command -v curl &>/dev/null; then
+            sudo yum install -y curl
+        fi
+        curl -fsSL https://rpm.nodesource.com/setup_lts.x | sudo bash -
+        sudo yum install -y nodejs
+    elif [[ "${PKG_MGR}" == "pacman" ]]; then
+        sudo pacman -S --noconfirm nodejs npm
+    elif [[ "${PKG_MGR}" == "apk" ]]; then
+        sudo apk add nodejs npm
+    else
+        error "No supported package manager found. Install Node.js manually: https://nodejs.org"
+        exit 1
+    fi
+    # Ensure node is in PATH (brew on macOS)
+    if [[ "${OS}" == "Darwin" ]] && [[ "${PKG_MGR}" == "brew" ]]; then
+        NODE_PREFIX="$(brew --prefix node 2>/dev/null || true)"
+        if [ -n "${NODE_PREFIX}" ] && [ -d "${NODE_PREFIX}/bin" ]; then
+            ensure_in_path "${NODE_PREFIX}/bin"
+        fi
+    fi
+    if ! command -v node &>/dev/null; then
+        error "Node.js installation failed."
+        exit 1
+    fi
+    ok "Node.js installed successfully."
+fi
+ok "node found: $(node --version)"
 
 # ─── Step 2: Backup existing ~/.claude/ ───
 if [ -d "${DOTCLAUDE_DIR}" ]; then

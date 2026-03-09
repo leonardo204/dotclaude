@@ -341,8 +341,8 @@ claude                    # Claude Code 실행
 ## 요구 사항
 
 - **Claude Code** (CLI)
-- **sqlite3** (없으면 install.sh가 자동 설치)
-- **Node.js** (HUD statusline 실행용)
+- **sqlite3** (없으면 install.sh가 자동 설치 + PATH 설정)
+- **Node.js** (없으면 install.sh가 자동 설치 + PATH 설정)
 
 ---
 
