@@ -341,7 +341,7 @@ claude                    # Claude Code 실행
 ## 요구 사항
 
 - **Claude Code** (CLI)
-- **sqlite3** (macOS/Linux 기본 내장)
+- **sqlite3** (없으면 install.sh가 자동 설치)
 - **Node.js** (HUD statusline 실행용)
 
 ---

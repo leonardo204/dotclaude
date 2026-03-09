@@ -34,6 +34,38 @@ fi
 
 ok "git found: $(git --version)"
 
+if ! command -v sqlite3 &>/dev/null; then
+    warn "sqlite3 is required but not installed. Attempting to install..."
+    if [[ "$(uname)" == "Darwin" ]]; then
+        if command -v brew &>/dev/null; then
+            brew install sqlite3
+        else
+            error "Homebrew not found. Install sqlite3 manually: brew install sqlite3"
+            exit 1
+        fi
+    elif command -v apt-get &>/dev/null; then
+        sudo apt-get update -qq && sudo apt-get install -y -qq sqlite3
+    elif command -v yum &>/dev/null; then
+        sudo yum install -y sqlite
+    elif command -v pacman &>/dev/null; then
+        sudo pacman -S --noconfirm sqlite
+    elif command -v apk &>/dev/null; then
+        sudo apk add sqlite
+    else
+        error "Could not detect package manager. Install sqlite3 manually."
+        exit 1
+    fi
+
+    if command -v sqlite3 &>/dev/null; then
+        ok "sqlite3 installed successfully."
+    else
+        error "sqlite3 installation failed."
+        exit 1
+    fi
+fi
+
+ok "sqlite3 found: $(sqlite3 --version | cut -d' ' -f1)"
+
 # ─── Step 2: Backup existing ~/.claude/ ───
 if [ -d "${DOTCLAUDE_DIR}" ]; then
     warn "Existing ~/.claude/ directory found."
