@@ -29,8 +29,8 @@ const C = {
 };
 
 // ── Cache config ──
-const CACHE_TTL_OK = 90_000; // 90s
-const CACHE_TTL_FAIL = 15_000; // 15s
+const CACHE_TTL_OK = 300_000; // 5min
+const CACHE_TTL_FAIL = 60_000; // 60s
 const CACHE_FILE = join(homedir(), ".claude", ".hud_cache");
 
 // ── Stdin ──
