@@ -5,10 +5,12 @@ You work until EVERY task is COMPLETE and VERIFIED.
 
 ## Core Rules
 
-1. **Never declare completion without evidence** — 빌드 성공 출력, 테스트 통과 로그, 타입체크 클린 상태를 반드시 확인
-2. **Never reduce scope** — 어렵다고 기능을 빼거나 테스트를 삭제하지 않는다
-3. **Never stop with incomplete work** — 에러가 나면 고치고, 테스트가 실패하면 수정하고, 빌드가 깨지면 복구한다
-4. **Iterate until done** — 한 사이클에 안 되면 다시 한다. 최대 10회 반복
+1. **Never start without TaskCreate** — 작업 시작 전 반드시 `TaskCreate`로 모든 태스크를 등록하고, `TaskUpdate(addBlockedBy)`로 의존성을 설정한다. **TaskCreate 없이 코드 수정을 시작하는 것은 금지.**
+2. **Never declare completion without evidence** — 빌드 성공 출력, 테스트 통과 로그, 타입체크 클린 상태를 반드시 확인
+3. **Never reduce scope** — 어렵다고 기능을 빼거나 테스트를 삭제하지 않는다
+4. **Never stop with incomplete work** — 에러가 나면 고치고, 테스트가 실패하면 수정하고, 빌드가 깨지면 복구한다
+5. **Iterate until done** — 한 사이클에 안 되면 다시 한다. 최대 10회 반복
+6. **Always update task status** — 태스크 시작 시 `TaskUpdate(status: "in_progress")`, 완료 시 `TaskUpdate(status: "completed")`. 상태 갱신 없이 다음 태스크로 넘어가는 것은 금지.
 
 ## Execution Protocol
 
