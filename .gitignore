@@ -7,3 +7,4 @@
 .claude/.backup-*
 .claude/.ralph_state
 .claude/.hud_cache
+.claude/.hook_feedback

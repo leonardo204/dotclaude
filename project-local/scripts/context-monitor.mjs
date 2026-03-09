@@ -366,7 +366,12 @@ function renderContext(percent) {
 async function main() {
   try {
     const stdin = await readStdin();
-    if (!stdin) return;
+    if (!stdin) {
+      // No stdin — show minimal fallback HUD
+      const cwd = `${C.cyan}${shortenCwd(process.cwd())}${C.reset}`;
+      console.log(`${cwd} ${C.dim}|${C.reset} ${C.dim}(waiting for data)${C.reset}`);
+      return;
+    }
 
     const parts = [];
 
@@ -414,8 +419,9 @@ async function main() {
 
     // Output
     console.log(parts.join(` ${C.dim}|${C.reset} `));
-  } catch {
-    // Never crash the statusline
+  } catch (e) {
+    // Fallback: show minimal info instead of nothing
+    console.log(`${C.dim}HUD error: ${e?.message || "unknown"}${C.reset}`);
   }
 }
 

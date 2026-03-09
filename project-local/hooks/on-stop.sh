@@ -18,4 +18,7 @@ echo "[hook:on-stop] DB 조회: 세션 #$SESSION_ID 편집 파일 수"
 # 세션 통계 업데이트
 NOW=$(date '+%Y-%m-%d %H:%M:%S')
 sqlite3 "$DB_PATH" "UPDATE sessions SET end_time='$NOW', files_changed=$FILES_CHANGED WHERE id=$SESSION_ID;" 2>/dev/null
-echo "[hook:on-stop] DB 저장: 세션 #$SESSION_ID 통계 갱신 ($FILES_CHANGED files)"
+
+# Stop stdout은 verbose 모드에서만 보이므로, 피드백을 파일에 축적
+FEEDBACK_FILE="$PROJECT_ROOT/.claude/.hook_feedback"
+echo "[on-stop] 세션 #$SESSION_ID 통계 갱신 ($FILES_CHANGED files)" >> "$FEEDBACK_FILE"

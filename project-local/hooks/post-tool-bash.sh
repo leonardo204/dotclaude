@@ -39,5 +39,8 @@ except:
 if [ -n "$EXIT_CODE" ]; then
     SESSION_ID=$(sqlite3 "$DB_PATH" "SELECT id FROM sessions ORDER BY id DESC LIMIT 1;" 2>/dev/null)
     sqlite3 "$DB_PATH" "INSERT INTO errors (session_id, tool_name, error_type) VALUES ($SESSION_ID, 'Bash', '$EXIT_CODE');" 2>/dev/null
-    echo "[hook:post-bash] DB 저장: 에러 감지 → $EXIT_CODE"
+
+    # PostToolUse stdout은 verbose 모드에서만 보이므로, 피드백을 파일에 축적
+    FEEDBACK_FILE="$PROJECT_ROOT/.claude/.hook_feedback"
+    echo "[post-bash] DB 저장: 에러 감지 → $EXIT_CODE" >> "$FEEDBACK_FILE"
 fi

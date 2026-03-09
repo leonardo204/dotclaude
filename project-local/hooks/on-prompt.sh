@@ -8,6 +8,14 @@ HELPER="$PROJECT_ROOT/.claude/db/helper.sh"
 
 [ ! -f "$DB_PATH" ] && exit 0
 
+# 축적된 hook 피드백 출력 (PostToolUse/Stop stdout은 verbose 모드에서만 보이므로 여기서 릴레이)
+FEEDBACK_FILE="$PROJECT_ROOT/.claude/.hook_feedback"
+if [ -f "$FEEDBACK_FILE" ] && [ -s "$FEEDBACK_FILE" ]; then
+    echo "[hook-feedback] 지난 턴 이후 DB 활동:"
+    cat "$FEEDBACK_FILE"
+    rm -f "$FEEDBACK_FILE"
+fi
+
 # 현재 세션 ID
 SESSION_ID=$(sqlite3 "$DB_PATH" "SELECT id FROM sessions ORDER BY id DESC LIMIT 1;" 2>/dev/null)
 
