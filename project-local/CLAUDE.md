@@ -70,7 +70,7 @@
 | `debugger` | 버그/에러 근본 원인 진단 (수정은 ralph) | ❌ |
 | `test-engineer` | 테스트 전략 수립 + 테스트 코드 작성 | ✅ |
 
-### 구현 파이프라인 (`/project:implement`)
+### 구현 파이프라인
 
 ```
 요청 → [planner] → 승인 → [architect] → 승인 → [ralph + test-engineer] → [verifier] → [reviewer] → 정리 → 사용자 확인
@@ -81,6 +81,9 @@
 - Phase 3-5 (구현/검증/리뷰): 자동 실행, 실패 시 debugger 진단 → Ralph 수정 후 재검증
 - 버그 발생 시: `debugger` 진단 → `ralph` 수정 (직접 사용 가능)
 - 강제 중단: "중단" 요청 시 즉시 중단 + 현재 상태 보고
+
+**자동 트리거**: `/project:implement` 명시 없이도 복잡한 기능 구현 요청 감지 시 자동 제안.
+판단 기준: 계획+설계가 필요한 규모인가? → Yes면 파이프라인 제안, No면 직접/ralph
 
 ### 커스텀 명령어
 
