@@ -265,11 +265,19 @@ function fetchUsageSync() {
       saveCache({ ...data, _rateLimited: false, _rlCount: 0 }, true);
       return data;
     }
-    saveCache({}, false);
-    return null;
+    // API error (auth failure etc.) — preserve stale data
+    const stale = {};
+    if (cached?.five_hour) stale.five_hour = cached.five_hour;
+    if (cached?.seven_day) stale.seven_day = cached.seven_day;
+    saveCache({ ...stale, _ok: false }, false);
+    return stale.five_hour || stale.seven_day ? stale : null;
   } catch {
-    saveCache({}, false);
-    return null;
+    // Network error — preserve stale data
+    const stale = {};
+    if (cached?.five_hour) stale.five_hour = cached.five_hour;
+    if (cached?.seven_day) stale.seven_day = cached.seven_day;
+    saveCache({ ...stale, _ok: false }, false);
+    return stale.five_hour || stale.seven_day ? stale : null;
   }
 }
 
