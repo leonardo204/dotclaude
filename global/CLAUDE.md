@@ -104,12 +104,12 @@ Claude Code의 네이티브 `Agent` 도구로 복잡한 작업을 위임한다.
 
 ## Project Setup
 
-### 새 프로젝트 (`/project-init`)
+### 새 프로젝트 (`/dotclaude-init`)
 - `.claude/` 폴더가 없는 새 프로젝트에서 실행
 - Context DB, Hooks, Commands, HUD 템플릿 자동 생성
 - 이후 CLAUDE.md의 PROJECT 섹션을 프로젝트에 맞게 작성
 
-### 기존 프로젝트 마이그레이션 (`/project-migration`)
+### 기존 프로젝트 마이그레이션 (`/dotclaude-migration`)
 - 이미 `.claude/`나 CLAUDE.md가 있는 프로젝트에서 실행
 - 기존 설정 백업 후 시스템 구성요소 머지 (기존 hook/command 보존)
 - CLAUDE.md를 COMMON + PROJECT 구조로 재구성 (상세 내용은 Ref-docs로 분리)

@@ -14,12 +14,12 @@
 {
   "statusLine": {
     "type": "command",
-    "command": "bash -c 'if [ -f .claude/scripts/context-monitor.mjs ]; then node .claude/scripts/context-monitor.mjs; else node ~/.claude/hud/omc-hud.mjs; fi'"
+    "command": "node ~/.claude/scripts/context-monitor.mjs",
+    "padding": 2
   }
 }
 ```
 
-- OMC HUD 미사용 시: `else` 이하를 제거하면 context-monitor.mjs 내장 fallback 사용
 - 이 설정은 1회만 하면 모든 프로젝트에 적용됨
 
 ## 자동 초기화

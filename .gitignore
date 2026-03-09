@@ -2,7 +2,6 @@
 .DS_Store
 
 # Claude Code runtime
-.omc/
 .claude/db/context.db
 .claude/.ctx_state
 .claude/.backup-*

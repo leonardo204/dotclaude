@@ -155,7 +155,7 @@ else: print('Project statusLine: 없음')
 # HUD 스크립트 파일 확인
 ls ~/.claude/scripts/context-monitor.mjs 2>/dev/null
 ls .claude/scripts/context-monitor.mjs 2>/dev/null
-# OMC HUD 확인
+# 기존 HUD 스크립트 확인
 ls ~/.claude/hud/ 2>/dev/null
 ```
 
@@ -246,7 +246,7 @@ statusLine 설정은 변경하지 않음.
 
 #### 6-4. 기존 HUD와의 충돌 처리
 
-- **OMC HUD 사용 중인 경우**: "현재 OMC HUD를 사용 중입니다. 시스템 HUD로 교체하면 OMC HUD가 비활성화됩니다. 교체/스킵을 선택하세요."
+- **기존 HUD 스크립트가 있는 경우**: "기존 HUD 스크립트가 있습니다. 시스템 HUD로 교체하면 기존 HUD가 비활성화됩니다. 교체/스킵을 선택하세요."
 - **커스텀 statusline 사용 중인 경우**: "기존 커스텀 statusline이 있습니다. 기존 스크립트를 백업 후 교체하시겠습니까?"
 - **statusLine이 전혀 없는 경우**: Global 설치를 기본 권장
 
