@@ -29,8 +29,8 @@ const C = {
 };
 
 // ── Cache config ──
-const CACHE_TTL_OK = 90_000; // 90s
-const CACHE_TTL_FAIL = 15_000; // 15s
+const CACHE_TTL_OK = 120_000; // 2min
+const CACHE_TTL_FAIL = 60_000; // 1min (rate limit 방지)
 const CACHE_FILE = join(homedir(), ".claude", ".hud_cache");
 
 // ── Stdin ──
@@ -228,14 +228,15 @@ function fetchUsageSync() {
   // Check cache first
   const cached = loadCache();
   if (cached) {
-    // If rate-limited with backoff, serve stale data or skip
     if (cached._rateLimited) {
+      // Backoff: 2min, 4min, 8min, max 10min
       const backoffMs =
         Math.min(120_000 * Math.pow(2, (cached._rlCount || 1) - 1), 600_000);
       if (Date.now() - (cached._ts || 0) < backoffMs) {
-        // Return stale usage data if available, else null
+        // Serve stale usage data if available
         return cached.five_hour || cached.seven_day ? cached : null;
       }
+      // Backoff expired — retry below
     } else {
       return cached;
     }
@@ -254,11 +255,15 @@ function fetchUsageSync() {
     // Check for rate limit error
     if (data.error?.type === "rate_limit_error") {
       const rlCount = (cached?._rlCount || 0) + 1;
+      // Preserve last known usage data across rate-limit cycles
+      const stale = {};
+      if (cached?.five_hour) stale.five_hour = cached.five_hour;
+      if (cached?.seven_day) stale.seven_day = cached.seven_day;
       saveCache(
-        { ...(cached || {}), _rateLimited: true, _rlCount: rlCount },
+        { ...stale, _rateLimited: true, _rlCount: rlCount },
         false
       );
-      return cached?.five_hour || cached?.seven_day ? cached : null;
+      return stale.five_hour || stale.seven_day ? { ...stale, _rateLimited: true } : null;
     }
 
     if (data.five_hour || data.seven_day) {
@@ -268,6 +273,11 @@ function fetchUsageSync() {
     saveCache({}, false);
     return null;
   } catch {
+    // Preserve stale data on network error too
+    if (cached?.five_hour || cached?.seven_day) {
+      saveCache({ ...cached, _ok: false }, false);
+      return cached;
+    }
     saveCache({}, false);
     return null;
   }
