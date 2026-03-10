@@ -133,6 +133,7 @@ flowchart TD
 - **Phase 1-2** (계획/설계): 사용자가 승인할 때까지 수정 반복
 - **Phase 3-5** (구현/검증/리뷰): 자동 실행, 실패 시 debugger → ralph 루프
 - 에이전트는 파이프라인 없이 **단독 사용**도 가능 (예: "이 버그 원인 좀 찾아줘" → debugger)
+- 에이전트 간 **DB 핸드오프**: 태스크 지시·결과 리포트·컨텍스트 공유를 `helper.sh agent-task/result/context` 명령으로 DB를 통해 교환
 
 ### 🪝 Hook 시스템
 
@@ -141,29 +142,16 @@ Claude Code의 **Hook**은 특정 이벤트(세션 시작, 파일 편집, 응답
 
 ```mermaid
 flowchart LR
-    A[세션 시작] --> B[session-start.sh<br/>DB 초기화 · 세션 기록]
+    A[세션 시작] --> B[session-start.sh<br/>DB 초기화 · 세션 기록 · 지침 캐시]
     C[매 턴] --> D[on-prompt.sh<br/>3단계 차등 주입 · compaction 복구]
-    E[파일 편집] --> F[post-tool-edit.sh<br/>편집 로깅 + working_files 캡처]
+    E[파일 편집] --> F[post-tool-edit.sh<br/>편집 로깅]
     G[Bash 실행] --> H[post-tool-bash.sh<br/>에러 감지 + error_context 캡처]
     I[응답 완료] --> J[on-stop.sh<br/>세션 통계 + session_summary 저장]
     I --> K[ralph-persist.sh<br/>미완료 시 중단 차단]
 ```
 
 모든 Hook은 **순수 bash + sqlite3**로 동작하며, 외부 의존성이 없습니다.
-
-**피드백 릴레이 패턴**: Claude Code의 Hook stdout 가시성은 이벤트 유형에 따라 다릅니다:
-- `SessionStart`/`UserPromptSubmit` → stdout이 **컨텍스트에 주입**되어 AI가 읽을 수 있음
-- `PostToolUse`/`Stop` → stdout이 **verbose 모드**(Ctrl+O)에서만 표시됨
-
-이 제약을 우회하기 위해 **축적 릴레이** 방식을 사용합니다:
-```mermaid
-flowchart LR
-    A[post-tool-edit.sh] --> D[.hook_feedback<br/>append]
-    B[post-tool-bash.sh] --> D
-    C[on-stop.sh] --> D
-    D -- 다음 프롬프트 시 --> E[on-prompt.sh<br/>읽기 → 출력 → 삭제]
-```
-사용자는 매 턴 `[hook-feedback] 지난 턴 이후 DB 활동:` 형태로 피드백을 받습니다.
+`ralph-persist.sh`는 Claude Code **Stop Hook 공식 JSON 프로토콜**(`{"decision": "block", "reason": "..."}`)을 사용합니다.
 
 ### 💾 Context DB
 
@@ -184,7 +172,9 @@ Hook이 자동으로 데이터를 기록하고, AI가 매 턴 참조합니다.
 
 | 키 | 캡처 시점 | 내용 |
 |----|-----------|------|
-| `working_files` | 파일 편집 시 | 편집된 파일 경로 목록 (중복 제거, 최대 20개) |
+| `_rules` | 세션 시작 시 | `~/.claude/CLAUDE.md` 주요 지침 (동적 추출) |
+| `_project_rules` | 세션 시작 시 | 프로젝트 `CLAUDE.md` PROJECT 섹션 |
+| `working_files` | ctx 70%+ 도달 시 | tool_usage에서 편집 파일 경로 자동 저장 (최대 20개) |
 | `error_context` | 에러 감지 시 | 최근 에러 타입 + 파일 경로 (최신 1건 덮어쓰기) |
 | `session_summary` | 세션 종료 시 | 편집 파일 수 + 파일 목록 요약 |
 
@@ -192,9 +182,9 @@ Hook이 자동으로 데이터를 기록하고, AI가 매 턴 참조합니다.
 
 | 상태 | 주입 내용 |
 |------|-----------|
-| 기본 | 세션 ID + 편집 수 + 미완료 태스크 수 + DB 사용 힌트 |
-| `high` (ctx 70%+) | "상태 저장 권장" 경고 |
-| `compacted` | live_context 전체 + 최근 결정 5건 + pending tasks + 최근 에러 3건 |
+| 기본 | 세션 ID + 편집 수 + 미완료 태스크 수 + 핵심 규칙 큐 라인 |
+| `high` (ctx 70%+) | working_files 자동 저장 + "추가 저장 권장" 경고 |
+| `compacted` | live_context 전체 (지침 포함) + 최근 결정 5건 + pending tasks + 최근 에러 3건 |
 
 CLI 도구로 직접 조회/수정도 가능합니다:
 
