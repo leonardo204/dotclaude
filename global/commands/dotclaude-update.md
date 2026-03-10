@@ -101,7 +101,25 @@ for f in .claude/commands/*.md; do
 done
 ```
 
-#### 3-3. settings.json 충돌 분석
+#### 3-3. CLAUDE.md 변경 감지
+
+기존 CLAUDE.md가 있는지, 시스템 템플릿과 다른지 확인:
+
+```bash
+if [ -f "CLAUDE.md" ]; then
+    # PROJECT 섹션 추출 (## PROJECT ~ 다음 --- 또는 파일 끝)
+    PROJECT_CONTENT=$(sed -n '/^## PROJECT/,/^---/{/^---$/!p}' CLAUDE.md)
+    if [ -n "$PROJECT_CONTENT" ]; then
+        echo "[CLAUDE.md] PROJECT 섹션 있음 — 보존 후 시스템 부분 재구성"
+    else
+        echo "[CLAUDE.md] PROJECT 섹션 없음 — 전체 교체"
+    fi
+else
+    echo "[CLAUDE.md] 없음 — 새로 생성"
+fi
+```
+
+#### 3-4. settings.json 충돌 분석
 
 기존 settings.json에 프로젝트 고유 설정이 있는지 확인:
 
@@ -116,7 +134,7 @@ cat "$SRC/settings.json"
 - **hooks 외 설정** (statusLine, enabledPlugins, permissions 등): 교체 시 유실됨
 - **프로젝트 고유 hook 등록**: 시스템 settings.json에 없는 hook event나 matcher
 
-#### 3-4. 사용자에게 영향 리포트
+#### 3-5. 사용자에게 영향 리포트
 
 ```
 ## 충돌 영향 분석
@@ -131,6 +149,10 @@ cat "$SRC/settings.json"
 - commands/deploy.md
 (없으면: "프로젝트 고유 파일 없음")
 
+### CLAUDE.md
+- PROJECT 섹션 보존 후 시스템 부분 재구성
+(없으면: "새로 생성")
+
 ### settings.json 프로젝트 고유 설정 (교체 시 유실)
 - enabledPlugins: {...}
 - statusLine: {...}
@@ -138,6 +160,7 @@ cat "$SRC/settings.json"
 
 ### 권장 조치
 - [자동] 프로젝트 고유 파일은 그대로 보존됩니다
+- [자동] CLAUDE.md의 PROJECT 섹션은 보존됩니다
 - [확인 필요] 커스터마이징된 시스템 파일 N개가 repo 버전으로 교체됩니다
 - [확인 필요] settings.json의 프로젝트 고유 설정을 머지해야 합니다
 

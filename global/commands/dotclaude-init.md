@@ -233,15 +233,41 @@ cp "$DOTCLAUDE_TMP/ref-docs/conventions.md" "$DOC_ROOT/claude/"
 cp "$DOTCLAUDE_TMP/ref-docs/setup.md" "$DOC_ROOT/claude/"
 ```
 
-### 6단계: CLAUDE.md 생성
+### 6단계: CLAUDE.md 생성/재구성
 
-프로젝트 루트에 `CLAUDE.md`가 없으면 템플릿 복사:
+#### 기존 CLAUDE.md가 없는 경우
 
+repo 템플릿을 그대로 복사:
 ```bash
-[ ! -f "CLAUDE.md" ] && cp "$SRC/CLAUDE.md" CLAUDE.md
+cp "$SRC/CLAUDE.md" CLAUDE.md
+```
+사용자에게 PROJECT 섹션 작성 안내.
+
+#### 기존 CLAUDE.md가 있는 경우
+
+1. 기존 CLAUDE.md에서 **PROJECT 섹션 내용을 추출**하여 보존
+2. repo 템플릿(`$SRC/CLAUDE.md`)을 기반으로 사용 (글로벌 참조 안내 + PROJECT 구조)
+3. 보존한 PROJECT 섹션을 템플릿의 PROJECT 위치에 삽입
+
+결과 구조:
+```markdown
+# Claude Code 개발 가이드
+
+> 공통 규칙(Agent Delegation, 커밋 정책, Context DB 등)은 글로벌 설정(`~/.claude/CLAUDE.md`)을 따릅니다.
+> 글로벌 미설치 시: `curl -fsSL https://raw.githubusercontent.com/leonardo204/dotclaude/main/install.sh | bash`
+
+---
+
+## PROJECT
+
+(기존 프로젝트 내용 보존)
+
+---
+
+*최종 업데이트: {오늘 날짜}*
 ```
 
-이미 있으면 스킵하고 사용자에게 안내: "기존 CLAUDE.md를 유지합니다. PROJECT 섹션을 확인하세요."
+초안을 사용자에게 보여주고 확인.
 
 #### CLAUDE.md 경로 치환
 
