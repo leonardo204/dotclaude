@@ -17,6 +17,13 @@
 | 기술 스택 | Bash, SQLite, Node.js (HUD 스크립트) |
 | 구조 | `install.sh` · `uninstall.sh` · `global/` (글로벌 설정) · `project-local/` (프로젝트 템플릿) · `ref-docs/` (참고 문서) |
 
+### 상세 문서
+
+- [Context DB 사용법](ref-docs/context-db.md)
+- [Context Monitor (HUD)](ref-docs/context-monitor.md)
+- [코딩 컨벤션](ref-docs/conventions.md)
+- [셋업 가이드](ref-docs/setup.md)
+
 ### 핵심 규칙
 
 - **global ↔ project-local 동기화 필수**: context-monitor.mjs 등 공유 파일 수정 시 양쪽 모두 반영. 한쪽만 수정하면 update 시 구버전 배포됨
@@ -41,4 +48,4 @@
 
 ---
 
-*최종 업데이트: 2026-03-09*
+*최종 업데이트: 2026-03-10*

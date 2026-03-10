@@ -21,7 +21,12 @@
 
 ### 상세 문서
 
-(프로젝트 관련 문서 링크)
+- [Context DB 사용법](Ref-docs/claude/context-db.md)
+- [Context Monitor (HUD)](Ref-docs/claude/context-monitor.md)
+- [코딩 컨벤션](Ref-docs/claude/conventions.md)
+- [셋업 가이드](Ref-docs/claude/setup.md)
+
+> 프로젝트별 문서를 추가하세요.
 
 ### 핵심 규칙
 
