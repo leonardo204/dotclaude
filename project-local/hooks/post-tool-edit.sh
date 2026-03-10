@@ -29,25 +29,4 @@ if [ -n "$FILE_PATH" ]; then
         INSERT INTO tool_usage (session_id, tool_name, file_path)
         VALUES ((SELECT id FROM sessions ORDER BY id DESC LIMIT 1), 'Edit', '$REL_PATH');
     " 2>/dev/null
-
-    # working_files에 자동 캡처 — helper.sh 대신 직접 sqlite3 인라인
-    # live_context 테이블 존재 보장 + 중복 없이 추가 + 최근 20개 제한
-    EXISTING=$(sqlite3 "$DB_PATH" "SELECT value FROM live_context WHERE key='working_files';" 2>/dev/null)
-    if [ -n "$EXISTING" ]; then
-        # 중복 확인
-        if echo "$EXISTING" | grep -Fxq "$REL_PATH"; then
-            : # 이미 존재, 추가 불필요
-        else
-            # 추가 후 최근 20개만 유지
-            UPDATED=$(printf '%s\n%s' "$EXISTING" "$REL_PATH" | tail -n 20)
-            UPDATED_ESC="${UPDATED//\'/\'\'}"
-            sqlite3 "$DB_PATH" "INSERT OR REPLACE INTO live_context (key, value, updated_at) VALUES ('working_files', '$UPDATED_ESC', datetime('now','localtime'));" 2>/dev/null
-        fi
-    else
-        sqlite3 "$DB_PATH" "INSERT OR REPLACE INTO live_context (key, value, updated_at) VALUES ('working_files', '$REL_PATH', datetime('now','localtime'));" 2>/dev/null
-    fi
-
-    # PostToolUse stdout은 verbose 모드에서만 보이므로, 피드백을 파일에 축적
-    FEEDBACK_FILE="$PROJECT_ROOT/.claude/.hook_feedback"
-    echo "[post-edit] DB 저장: 편집 기록 → $REL_PATH" >> "$FEEDBACK_FILE"
 fi

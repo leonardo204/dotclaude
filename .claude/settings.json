@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; bash \"$ROOT/.claude/hooks/session-start.sh\"'"
+            "command": "bash -c 'ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; echo \"$ROOT\" > \"$ROOT/.claude/.project_root\"; bash \"$ROOT/.claude/hooks/session-start.sh\"'"
           }
         ]
       }
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; bash \"$ROOT/.claude/hooks/on-prompt.sh\"'"
+            "command": "bash -c '[ -f .claude/.project_root ] && ROOT=$(cat .claude/.project_root) || { ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; }; bash \"$ROOT/.claude/hooks/on-prompt.sh\"'"
           }
         ]
       }
@@ -28,7 +28,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; bash \"$ROOT/.claude/hooks/post-tool-edit.sh\"'"
+            "command": "bash -c '[ -f .claude/.project_root ] && ROOT=$(cat .claude/.project_root) || { ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; }; bash \"$ROOT/.claude/hooks/post-tool-edit.sh\"'"
           }
         ]
       },
@@ -37,7 +37,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; bash \"$ROOT/.claude/hooks/post-tool-bash.sh\"'"
+            "command": "bash -c '[ -f .claude/.project_root ] && ROOT=$(cat .claude/.project_root) || { ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; }; bash \"$ROOT/.claude/hooks/post-tool-bash.sh\"'"
           }
         ]
       }
@@ -48,7 +48,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; bash \"$ROOT/.claude/hooks/on-stop.sh\"'"
+            "command": "bash -c '[ -f .claude/.project_root ] && ROOT=$(cat .claude/.project_root) || { ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; }; bash \"$ROOT/.claude/hooks/on-stop.sh\"'"
           }
         ]
       },
@@ -57,7 +57,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; bash \"$ROOT/.claude/hooks/ralph-persist.sh\"'"
+            "command": "bash -c '[ -f .claude/.project_root ] && ROOT=$(cat .claude/.project_root) || { ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; }; bash \"$ROOT/.claude/hooks/ralph-persist.sh\"'"
           }
         ]
       }

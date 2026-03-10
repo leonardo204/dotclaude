@@ -8,6 +8,7 @@
 .claude/.ralph_state
 .claude/.hud_cache
 .claude/.hook_feedback
+.claude/.project_root
 
 # Playwright browser state
 browser-state-*.json

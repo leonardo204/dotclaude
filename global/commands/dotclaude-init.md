@@ -326,6 +326,7 @@ grep -q '.backup-' .gitignore 2>/dev/null || echo '.claude/.backup-*' >> .gitign
 grep -q '.ralph_state' .gitignore 2>/dev/null || echo '.claude/.ralph_state' >> .gitignore
 grep -q '.hud_cache' .gitignore 2>/dev/null || echo '.claude/.hud_cache' >> .gitignore
 grep -q '.hook_feedback' .gitignore 2>/dev/null || echo '.claude/.hook_feedback' >> .gitignore
+grep -q '.project_root' .gitignore 2>/dev/null || echo '.claude/.project_root' >> .gitignore
 ```
 
 ### 9단계: 정리

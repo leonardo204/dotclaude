@@ -4,17 +4,8 @@
 
 PROJECT_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 DB_PATH="$PROJECT_ROOT/.claude/db/context.db"
-HELPER="$PROJECT_ROOT/.claude/db/helper.sh"
 
 [ ! -f "$DB_PATH" ] && exit 0
-
-# 축적된 hook 피드백 출력 (PostToolUse/Stop stdout은 verbose 모드에서만 보이므로 여기서 릴레이)
-FEEDBACK_FILE="$PROJECT_ROOT/.claude/.hook_feedback"
-if [ -f "$FEEDBACK_FILE" ] && [ -s "$FEEDBACK_FILE" ]; then
-    echo "[hook-feedback] 지난 턴 이후 DB 활동:"
-    cat "$FEEDBACK_FILE"
-    rm -f "$FEEDBACK_FILE"
-fi
 
 # 현재 세션 ID
 SESSION_ID=$(sqlite3 "$DB_PATH" "SELECT id FROM sessions ORDER BY id DESC LIMIT 1;" 2>/dev/null)
@@ -69,8 +60,13 @@ if [ "$CTX_ALERT" = "compacted" ]; then
     sed 's/"alert":"compacted"/"alert":"none"/' "$CTX_STATE" > "${CTX_STATE}.tmp" && mv "${CTX_STATE}.tmp" "$CTX_STATE"
 
 elif [ "$CTX_ALERT" = "high" ]; then
-    # === 경고 모드 ===
-    echo "[ctx-warn] Context at ${CTX_CURRENT}%. live-set으로 상태 저장 권장"
+    # === 경고 모드: 핵심 상태 자동 저장 ===
+    WORKING=$(sqlite3 "$DB_PATH" "SELECT DISTINCT file_path FROM tool_usage WHERE session_id=$SESSION_ID ORDER BY id DESC LIMIT 20;" 2>/dev/null)
+    if [ -n "$WORKING" ]; then
+        WORKING_ESC="${WORKING//\'/\'\'}"
+        sqlite3 "$DB_PATH" "INSERT OR REPLACE INTO live_context (key, value, updated_at) VALUES ('working_files', '$WORKING_ESC', datetime('now','localtime'));" 2>/dev/null
+    fi
+    echo "[ctx-warn] Context at ${CTX_CURRENT}%. 핵심 상태 자동 저장 완료. live-set으로 추가 저장 권장"
 
 else
     # === 기본 모드 (최소 주입) ===
@@ -78,5 +74,5 @@ else
     PENDING_TASKS=$(sqlite3 "$DB_PATH" "SELECT COUNT(*) FROM tasks WHERE status IN ('pending','in_progress');" 2>/dev/null)
 
     echo "[ctx] Session #$SESSION_ID | Edits: $SESSION_EDITS files | Pending tasks: $PENDING_TASKS"
-    echo "[ctx] DB: bash .claude/db/helper.sh <cmd> | live-set/append, decision-add, task-add/done"
+    echo "[rules] 한국어 · verify · agent≥3 · live-set · no-commit"
 fi

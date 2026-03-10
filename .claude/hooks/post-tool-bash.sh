@@ -80,7 +80,4 @@ if [ -n "$RESULT" ]; then
     ERR_INFO_ESC="${ERR_INFO//\'/\'\'}"
     sqlite3 "$DB_PATH" "INSERT OR REPLACE INTO live_context (key, value, updated_at) VALUES ('error_context', '$ERR_INFO_ESC', datetime('now','localtime'));" 2>/dev/null
 
-    # PostToolUse stdout은 verbose 모드에서만 보이므로, 피드백을 파일에 축적
-    FEEDBACK_FILE="$PROJECT_ROOT/.claude/.hook_feedback"
-    echo "[post-bash] DB 저장: 에러 감지 → $EXIT_CODE" >> "$FEEDBACK_FILE"
 fi

@@ -50,7 +50,3 @@ if [ -n "$FILE_LIST" ] && [ "$TOTAL_FILES" -gt 0 ] 2>/dev/null; then
     SUMMARY_ESC="${SUMMARY//\'/\'\'}"
     sqlite3 "$DB_PATH" "INSERT OR REPLACE INTO live_context (key, value, updated_at) VALUES ('session_summary', '$SUMMARY_ESC', datetime('now','localtime'));" 2>/dev/null
 fi
-
-# Stop stdout은 verbose 모드에서만 보이므로, 피드백을 파일에 축적
-FEEDBACK_FILE="$PROJECT_ROOT/.claude/.hook_feedback"
-echo "[on-stop] 세션 #$SESSION_ID 통계 갱신 ($FILES_CHANGED files)" >> "$FEEDBACK_FILE"
