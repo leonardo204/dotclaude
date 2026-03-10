@@ -142,6 +142,61 @@ case "$CMD" in
         echo "Live context cleared."
         ;;
 
+    # === Agent 핸드오프 ===
+    agent-task)
+        NAME="$1"
+        if [ -n "$2" ]; then
+            VALUE="$2"
+            VALUE_ESC="${VALUE//\'/\'\'}"
+            sqlite3 "$DB_PATH" "INSERT OR REPLACE INTO live_context (key, value, updated_at) VALUES ('_task:$NAME', '$VALUE_ESC', datetime('now','localtime'));"
+        elif [ ! -t 0 ]; then
+            VALUE=$(cat)
+            VALUE_ESC="${VALUE//\'/\'\'}"
+            sqlite3 "$DB_PATH" "INSERT OR REPLACE INTO live_context (key, value, updated_at) VALUES ('_task:$NAME', '$VALUE_ESC', datetime('now','localtime'));"
+        else
+            sqlite3 "$DB_PATH" "SELECT value FROM live_context WHERE key='_task:$NAME';" 2>/dev/null
+        fi
+        ;;
+
+    agent-result)
+        NAME="$1"
+        if [ -n "$2" ]; then
+            VALUE="$2"
+            VALUE_ESC="${VALUE//\'/\'\'}"
+            sqlite3 "$DB_PATH" "INSERT OR REPLACE INTO live_context (key, value, updated_at) VALUES ('_result:$NAME', '$VALUE_ESC', datetime('now','localtime'));"
+        elif [ ! -t 0 ]; then
+            VALUE=$(cat)
+            VALUE_ESC="${VALUE//\'/\'\'}"
+            sqlite3 "$DB_PATH" "INSERT OR REPLACE INTO live_context (key, value, updated_at) VALUES ('_result:$NAME', '$VALUE_ESC', datetime('now','localtime'));"
+        else
+            sqlite3 "$DB_PATH" "SELECT value FROM live_context WHERE key='_result:$NAME';" 2>/dev/null
+        fi
+        ;;
+
+    agent-context)
+        KEY="$1"
+        if [ -n "$2" ]; then
+            VALUE="$2"
+            VALUE_ESC="${VALUE//\'/\'\'}"
+            sqlite3 "$DB_PATH" "INSERT OR REPLACE INTO live_context (key, value, updated_at) VALUES ('_ctx:$KEY', '$VALUE_ESC', datetime('now','localtime'));"
+        elif [ ! -t 0 ]; then
+            VALUE=$(cat)
+            VALUE_ESC="${VALUE//\'/\'\'}"
+            sqlite3 "$DB_PATH" "INSERT OR REPLACE INTO live_context (key, value, updated_at) VALUES ('_ctx:$KEY', '$VALUE_ESC', datetime('now','localtime'));"
+        else
+            sqlite3 "$DB_PATH" "SELECT value FROM live_context WHERE key='_ctx:$KEY';" 2>/dev/null
+        fi
+        ;;
+
+    agent-cleanup)
+        NAME="$1"
+        sqlite3 "$DB_PATH" "DELETE FROM live_context WHERE key LIKE '_task:$NAME' OR key LIKE '_result:$NAME';"
+        ;;
+
+    agent-list)
+        sqlite3 -header -column "$DB_PATH" "SELECT key, length(value) as bytes, updated_at FROM live_context WHERE key LIKE '_task:%' OR key LIKE '_result:%' OR key LIKE '_ctx:%' ORDER BY key;"
+        ;;
+
     # === 도구 사용 ===
     tool-log)
         # helper.sh tool-log <tool_name> <file_path>
@@ -195,5 +250,12 @@ case "$CMD" in
         echo "  live-clear              Clear live context"
         echo "  stats                   Show DB statistics"
         echo "  query <sql>             Run raw SQL"
+        echo ""
+        echo "  Agent:"
+        echo "    agent-task <name> [content]     에이전트 태스크 설정/조회 (stdin 지원)"
+        echo "    agent-result <name> [content]   에이전트 결과 설정/조회 (stdin 지원)"
+        echo "    agent-context <key> [value]     공유 컨텍스트 설정/조회 (stdin 지원)"
+        echo "    agent-cleanup <name>            에이전트 태스크+결과 삭제"
+        echo "    agent-list                      에이전트 관련 항목 전체 조회"
         ;;
 esac

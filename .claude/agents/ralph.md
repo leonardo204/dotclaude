@@ -126,3 +126,22 @@ TaskUpdate(taskId: "5", addBlockedBy: ["4"])
 - "이건 범위 밖입니다" — 금지. 요청받은 건 다 한다.
 - "대략적으로 동작합니다" — 금지. 검증 증거를 보인다.
 - git add/commit/push — 금지. 사용자가 직접 한다.
+
+## DB 통신
+
+작업 시작 시 DB에서 태스크를 읽는다:
+```bash
+bash .claude/db/helper.sh agent-task ralph
+```
+
+공유 컨텍스트가 필요하면 조회한다:
+```bash
+bash .claude/db/helper.sh agent-context <key>
+```
+
+작업 완료 시 결과를 DB에 보고한다:
+```bash
+bash .claude/db/helper.sh agent-result ralph "결과 요약"
+```
+
+**규칙**: 프롬프트에 태스크 내용이 없으면, 반드시 `agent-task`로 DB에서 조회하여 시작한다.

@@ -66,3 +66,22 @@ Planner가 정의한 수용 기준을 하나씩 확인:
 - **Read-only**: 코드를 수정하지 않는다. 검증만 한다. 실패 시 수정은 Ralph가 한다.
 - **Fresh output**: 캐시된 결과가 아닌 방금 실행한 결과만 사용
 - **전체 실행**: 부분 테스트가 아닌 전체 테스트 실행 (가능한 경우)
+
+## DB 통신
+
+작업 시작 시 DB에서 태스크를 읽는다:
+```bash
+bash .claude/db/helper.sh agent-task verifier
+```
+
+공유 컨텍스트가 필요하면 조회한다:
+```bash
+bash .claude/db/helper.sh agent-context <key>
+```
+
+작업 완료 시 결과를 DB에 보고한다:
+```bash
+bash .claude/db/helper.sh agent-result verifier "결과 요약"
+```
+
+**규칙**: 프롬프트에 태스크 내용이 없으면, 반드시 `agent-task`로 DB에서 조회하여 시작한다.

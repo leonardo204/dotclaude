@@ -55,16 +55,26 @@ Context7 MCP 사용 가능 시: `resolve-library-id` → `query-docs` 순서로 
 
 ### 위임 패턴
 
-**사용자 확인이 필요한 멀티스텝 작업:**
+**DB 핸드오프 프로토콜 (기본)**:
 ```
-메인: 분석/리포트 → 사용자 확인
-사용자: "진행해"
-메인: Agent 생성 → 절차 위임 → 결과 수신 → 요약 보고
+메인: helper.sh agent-task <name> "태스크 내용" → DB에 저장
+메인: Agent(prompt: ".claude/agents/<name>.md의 지침을 따라 작업하라. 태스크: <name>")
+Agent: DB에서 태스크 조회 → 실행 → DB에 결과 보고
+메인: helper.sh agent-result <name> → 결과 확인
 ```
+
+**프롬프트 직접 전달 (단순 작업)**:
+태스크가 1-2줄로 충분한 경우, DB 핸드오프 없이 프롬프트에 직접 포함해도 된다.
 
 **병렬 실행:**
 - 독립 작업 2개 이상 → 단일 메시지에 Agent 도구 여러 개 호출
 - 의존 관계 있으면 → 순차 실행
+
+**Agent 간 컨텍스트 공유:**
+```
+Agent A: helper.sh agent-context <key> "공유 정보" → DB에 저장
+Agent B: helper.sh agent-context <key> → DB에서 조회
+```
 
 ### 커스텀 에이전트 (`.claude/agents/`)
 
@@ -117,7 +127,26 @@ Agent(subagent_type: "general-purpose", prompt: "
 
 ---
 
-## Context Persistence
+## Context 저장 규칙
+
+**컨텍스트 절약의 핵심: 작업 맥락을 DB에 저장하고, 대화 히스토리 의존을 줄인다.**
+
+### 필수 저장 트리거
+
+| 시점 | 명령 | 예시 |
+|------|------|------|
+| 새 작업 시작 | `live-set current_task "..."` | `live-set current_task "Hook 성능 최적화"` |
+| 핵심 발견 | `live-set key_findings "..."` | `live-set key_findings "python3 177ms → jq 4ms"` |
+| 설계 결정 | `decision-add "..."` | `decision-add "git rev-parse 캐시 도입" "매 턴 152ms 절감"` |
+| 작업 전환 | `live-set current_task "..."` | 이전 태스크 → 새 태스크로 갱신 |
+
+### 자동 저장 (Hook)
+
+- `working_files` — 세션 시작 시 리셋, 편집마다 자동 추가
+- `error_context` — 세션 시작 시 리셋, 에러 시 자동 덮어쓰기
+- `session_summary` — 세션 종료 시 자동 저장
+
+### `<remember>` 태그
 
 `<remember>` 태그로 세션 간 정보 보존:
 - `<remember>정보</remember>` — 7일 유지
