@@ -195,7 +195,7 @@ Agent(subagent_type: "general-purpose", prompt: "
 ### Live Context 관리
 
 Hook이 자동으로 핵심 상태를 캡처한다:
-- `working_files` — 편집 파일 경로 (post-tool-edit.sh가 자동 추가)
+- `working_files` — 편집 파일 경로 (ctx 70%+ 시 on-prompt.sh가 tool_usage에서 자동 저장)
 - `error_context` — 최근 에러 정보 (post-tool-bash.sh가 자동 덮어쓰기)
 - `session_summary` — 세션 편집 요약 (on-stop.sh가 자동 저장)
 - `current_task`, `key_findings` — 수동 저장 (`live-set`)
@@ -204,8 +204,8 @@ Hook이 자동으로 핵심 상태를 캡처한다:
 
 | Hook | 시점 | 역할 |
 |------|------|------|
-| session-start.sh | 세션 시작 | DB 초기화, 세션 기록, 미완료 태스크 표시 |
-| on-prompt.sh | 매 턴 | 3단계 차등 주입 (기본/경고/복구), hook_feedback 릴레이 |
-| post-tool-edit.sh | 파일 편집 후 | 편집 파일 로깅 + working_files 자동 캡처 |
-| post-tool-bash.sh | Bash 실행 후 | 에러 감지/로깅 + error_context 자동 캡처 |
+| session-start.sh | 세션 시작 | DB 초기화, 세션 기록, CLAUDE.md 지침 캐시, 미완료 태스크 표시 |
+| on-prompt.sh | 매 턴 | 3단계 차등 주입 (기본/경고/복구) |
+| post-tool-edit.sh | 파일 편집 후 | tool_usage에 편집 기록 (working_files·session_summary의 데이터 소스) |
+| post-tool-bash.sh | Bash 실행 후 | 에러 시에만 분류/로깅 + error_context 자동 캡처 |
 | on-stop.sh | 세션 종료 | 세션 통계 업데이트 + session_summary 자동 저장 |

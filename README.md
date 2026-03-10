@@ -144,8 +144,8 @@ Claude Code의 **Hook**은 특정 이벤트(세션 시작, 파일 편집, 응답
 flowchart LR
     A[세션 시작] --> B[session-start.sh<br/>DB 초기화 · 세션 기록 · 지침 캐시]
     C[매 턴] --> D[on-prompt.sh<br/>3단계 차등 주입 · compaction 복구]
-    E[파일 편집] --> F[post-tool-edit.sh<br/>편집 로깅]
-    G[Bash 실행] --> H[post-tool-bash.sh<br/>에러 감지 + error_context 캡처]
+    E[파일 편집] --> F[post-tool-edit.sh<br/>tool_usage 기록]
+    G[Bash 실행] --> H[post-tool-bash.sh<br/>에러 시 분류/로깅]
     I[응답 완료] --> J[on-stop.sh<br/>세션 통계 + session_summary 저장]
     I --> K[ralph-persist.sh<br/>미완료 시 중단 차단]
 ```
