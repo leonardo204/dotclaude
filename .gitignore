@@ -8,3 +8,10 @@
 .claude/.ralph_state
 .claude/.hud_cache
 .claude/.hook_feedback
+
+# Playwright browser state
+browser-state-*.json
+browser-state-*-fingerprint.json
+
+# Testbed
+testbed/
