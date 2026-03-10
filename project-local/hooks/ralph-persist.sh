@@ -38,7 +38,8 @@ if [ "$ACTIVE" = "true" ] && [ "$STATUS" != "completed" ]; then
     cat <<EOF
 {
   "decision": "block",
-  "reason": "Ralph 모드 활성 (반복 #${ITERATION:-0}). 목표: ${GOAL:-미정}. 작업을 계속 진행하세요. 빌드/테스트를 실행하고, 실패하면 수정하고, 완료될 때까지 반복하세요. 완료 시 .ralph_state의 status를 completed로 변경하세요."
+  "reason": "prompt",
+  "systemMessage": "Ralph 모드 활성: 태스크 미완료 상태입니다. .claude/.ralph_state를 확인하고 작업을 계속하세요."
 }
 EOF
 fi
