@@ -1,3 +1,7 @@
+---
+description: "Context DB 패턴 분석 → 자동화 가능한 패턴 발견 → skill/command/hook 제안"
+---
+
 SQLite context 분석 → 자동화 가능한 패턴 발견 → skill/command/hook 제안
 
 ## 실행 순서

@@ -1,22 +1,20 @@
+---
+description: "최근 작업 브리핑 + 다음 할 일 제안"
+---
+
 최근 작업 브리핑 + 다음 할 일 제안
 
 ## 실행 순서
 
 1. Remote sync 확인:
-   ```bash
-   git fetch origin
-   git log --oneline -10 HEAD
-   git log --oneline origin/main..HEAD  # 아직 안 푸시한 커밋
-   git log --oneline HEAD..origin/main  # 리모트에만 있는 커밋
-   ```
+   - 최근 커밋: !`git log --oneline -10 HEAD`
+   - 미푸시 커밋: !`git log --oneline origin/main..HEAD 2>/dev/null || echo "(remote 없음)"`
+   - 리모트 전용: !`git log --oneline HEAD..origin/main 2>/dev/null || echo "(remote 없음)"`
 
 2. SQLite에서 최근 세션/작업 조회:
-   ```bash
-   sqlite3 .claude/db/context.db "SELECT * FROM sessions ORDER BY id DESC LIMIT 5;"
-   sqlite3 .claude/db/context.db "SELECT * FROM commits ORDER BY id DESC LIMIT 10;"
-   sqlite3 .claude/db/context.db "SELECT * FROM tasks WHERE status IN ('pending','in_progress') ORDER BY priority;"
-   sqlite3 .claude/db/context.db "SELECT * FROM decisions ORDER BY id DESC LIMIT 5;"
-   ```
+   - 최근 세션: !`sqlite3 -header -column .claude/db/context.db "SELECT id, start_time, end_time FROM sessions ORDER BY id DESC LIMIT 5;" 2>/dev/null || echo "(DB 없음)"`
+   - 미완료 태스크: !`sqlite3 -header -column .claude/db/context.db "SELECT id, priority, status, description FROM tasks WHERE status IN ('pending','in_progress') ORDER BY priority;" 2>/dev/null || echo "(없음)"`
+   - 최근 결정: !`sqlite3 -header -column .claude/db/context.db "SELECT id, date, description FROM decisions ORDER BY id DESC LIMIT 5;" 2>/dev/null || echo "(없음)"`
 
 3. 최근 변경 사항을 사용자에게 요약 설명:
    - 마지막 세션에서 무엇을 했는지

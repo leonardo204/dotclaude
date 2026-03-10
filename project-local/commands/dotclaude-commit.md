@@ -1,8 +1,15 @@
+---
+description: "변경 분석 → 문서 업데이트 → 기능별 커밋 → 푸시"
+allowed-tools: [Read, Glob, Grep, Bash, Edit]
+---
+
 Smart commit: 변경 사항 분석 → 관련 문서 업데이트 → 기능별 커밋 → 푸시
 
 ## 실행 순서
 
-1. `git status`와 `git diff`로 변경된 파일 목록 파악
+1. 현재 변경 상태 확인:
+   - 변경 파일: !`git status --short`
+   - 변경 통계: !`git diff --stat`
 1-1. **Context DB만 변경된 경우 스킵**: 변경 파일이 `.claude/db/context.db` 하나뿐이면, 실제 작업 없이 DB만 업데이트된 것이므로 커밋하지 않고 사용자에게 "Context DB만 변경되었습니다. 커밋할까요?" 확인. 사용자가 명시적으로 요청한 경우에만 커밋 진행.
 2. 변경 내용을 기능 단위로 그룹핑
 3. 각 그룹에 대해:
