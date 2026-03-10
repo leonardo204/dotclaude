@@ -1,6 +1,7 @@
 #!/bin/bash
 # PostToolUse Hook (matcher: Bash): 에러 감지 시 자동 로깅
 # stdin으로 tool result JSON 받음
+# [최적화] python3 2회 → jq 1회 (에러 분류 + 파일 경로 추출을 단일 jq 호출로 통합)
 
 PROJECT_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 DB_PATH="$PROJECT_ROOT/.claude/db/context.db"
@@ -9,59 +10,75 @@ DB_PATH="$PROJECT_ROOT/.claude/db/context.db"
 
 INPUT=$(cat)
 
-# exit code 추출 (에러인 경우만 처리)
-EXIT_CODE=$(echo "$INPUT" | python3 -c "
-import sys, json
-try:
-    d = json.load(sys.stdin)
-    # Check for error in output
-    stderr = d.get('stderr', '')
-    stdout = d.get('stdout', '')
-    output = stderr + stdout
-    if 'error' in output.lower() or 'failed' in output.lower() or 'fatal' in output.lower():
-        # Classify error type
-        if 'build' in output.lower() or 'compile' in output.lower():
-            print('build_fail')
-        elif 'test' in output.lower():
-            print('test_fail')
-        elif 'conflict' in output.lower():
-            print('conflict')
-        elif 'permission' in output.lower():
-            print('permission')
-        else:
-            print('runtime_error')
-    else:
-        print('')
-except:
-    print('')
-" 2>/dev/null)
+# 에러 분류 + 파일 경로 추출을 한번에 수행
+if command -v jq >/dev/null 2>&1; then
+    # jq로 단일 호출: "error_type|file_path" 형식 반환
+    RESULT=$(echo "$INPUT" | jq -r '
+        def classify:
+            ((.stderr // "") + (.stdout // "")) as $output |
+            ($output | ascii_downcase) as $lower |
+            if ($lower | test("error|failed|fatal")) then
+                if ($lower | test("build|compile")) then "build_fail"
+                elif ($lower | test("test")) then "test_fail"
+                elif ($lower | test("conflict")) then "conflict"
+                elif ($lower | test("permission")) then "permission"
+                else "runtime_error"
+                end
+            else ""
+            end;
+        def extract_file:
+            ((.stderr // "") + (.stdout // "")) as $output |
+            ($output | capture("(?:^|[\\s:])(?<f>[^\\s:]+\\.[a-zA-Z]{1,10})(?:[\\s:]|$)") // {f:""}) | .f;
+        classify as $err |
+        if $err == "" then ""
+        else ($err + "|" + extract_file)
+        end
+    ' 2>/dev/null)
+else
+    # 순수 bash fallback
+    STDERR=$(echo "$INPUT" | grep -o '"stderr":"[^"]*"' | head -1 | sed 's/"stderr":"//;s/"$//')
+    STDOUT=$(echo "$INPUT" | grep -o '"stdout":"[^"]*"' | head -1 | sed 's/"stdout":"//;s/"$//')
+    OUTPUT="$STDERR$STDOUT"
+    OUTPUT_LOWER=$(echo "$OUTPUT" | tr '[:upper:]' '[:lower:]')
 
-if [ -n "$EXIT_CODE" ]; then
-    SESSION_ID=$(sqlite3 "$DB_PATH" "SELECT id FROM sessions ORDER BY id DESC LIMIT 1;" 2>/dev/null)
-    sqlite3 "$DB_PATH" "INSERT INTO errors (session_id, tool_name, error_type) VALUES ($SESSION_ID, 'Bash', '$EXIT_CODE');" 2>/dev/null
+    ERR_TYPE=""
+    if echo "$OUTPUT_LOWER" | grep -qE 'error|failed|fatal'; then
+        if echo "$OUTPUT_LOWER" | grep -qE 'build|compile'; then
+            ERR_TYPE="build_fail"
+        elif echo "$OUTPUT_LOWER" | grep -q 'test'; then
+            ERR_TYPE="test_fail"
+        elif echo "$OUTPUT_LOWER" | grep -q 'conflict'; then
+            ERR_TYPE="conflict"
+        elif echo "$OUTPUT_LOWER" | grep -q 'permission'; then
+            ERR_TYPE="permission"
+        else
+            ERR_TYPE="runtime_error"
+        fi
+    fi
 
-    # error_context에 자동 캡처 (최근 1건 덮어쓰기)
-    # stdin에서 file_path 추출 시도
-    ERR_FILE=$(echo "$INPUT" | python3 -c "
-import sys, json, re
-try:
-    d = json.load(sys.stdin)
-    cmd = d.get('tool_input',{}).get('command','')
-    # 파일 경로 추출 시도 (마지막 인자 또는 에러 출력에서)
-    stderr = d.get('stderr','')
-    stdout = d.get('stdout','')
-    output = stderr + stdout
-    # 일반적인 파일 경로 패턴 매칭
-    m = re.search(r'(?:^|[\s:])([^\s:]+\.\w{1,10})(?:[\s:]|$)', output)
-    if m:
-        print(m.group(1))
-    else:
-        print('')
-except:
-    print('')
-" 2>/dev/null)
+    if [ -n "$ERR_TYPE" ]; then
+        # 파일 경로 추출 시도
+        ERR_FILE=$(echo "$OUTPUT" | grep -oE '[^ :]+\.[a-zA-Z]{1,10}' | head -1)
+        RESULT="${ERR_TYPE}|${ERR_FILE}"
+    else
+        RESULT=""
+    fi
+fi
+
+if [ -n "$RESULT" ]; then
+    EXIT_CODE="${RESULT%%|*}"
+    ERR_FILE="${RESULT#*|}"
+
+    # 세션 ID 조회 + 에러 INSERT를 단일 sqlite3 호출로 병합
+    sqlite3 "$DB_PATH" "
+        INSERT INTO errors (session_id, tool_name, error_type)
+        VALUES ((SELECT id FROM sessions ORDER BY id DESC LIMIT 1), 'Bash', '$EXIT_CODE');
+    " 2>/dev/null
+
+    # error_context에 자동 캡처 — helper.sh 대신 직접 sqlite3 인라인
     ERR_INFO="${EXIT_CODE}: ${ERR_FILE:-unknown}"
-    bash "$PROJECT_ROOT/.claude/db/helper.sh" live-set error_context "$ERR_INFO"
+    ERR_INFO_ESC="${ERR_INFO//\'/\'\'}"
+    sqlite3 "$DB_PATH" "INSERT OR REPLACE INTO live_context (key, value, updated_at) VALUES ('error_context', '$ERR_INFO_ESC', datetime('now','localtime'));" 2>/dev/null
 
     # PostToolUse stdout은 verbose 모드에서만 보이므로, 피드백을 파일에 축적
     FEEDBACK_FILE="$PROJECT_ROOT/.claude/.hook_feedback"
