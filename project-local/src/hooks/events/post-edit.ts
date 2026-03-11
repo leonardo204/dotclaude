@@ -4,6 +4,7 @@
  * stdout 출력 없음 (0 bytes)
  */
 
+import { chmodSync } from 'node:fs';
 import type { ContextDB } from '../../shared/db.js';
 
 interface PostToolUseInput {
@@ -44,5 +45,12 @@ export async function handlePostEdit({ projectRoot, db, stdinData }: PostEditInp
     db.toolLog(sessionId, 'Edit', relPath);
   }
 
-  // stdout 출력 없음
+  // .sh 파일을 Write로 생성한 경우 자동 chmod +x (non-blocking)
+  if (filePath.endsWith('.sh') && input.tool_name === 'Write') {
+    try {
+      chmodSync(filePath, 0o755);
+    } catch {
+      // ignore
+    }
+  }
 }

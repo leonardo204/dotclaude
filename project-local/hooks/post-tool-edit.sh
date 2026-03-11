@@ -25,4 +25,11 @@ sqlite3 "$DB_PATH" "
     VALUES ((SELECT id FROM sessions ORDER BY id DESC LIMIT 1), 'Edit', '${REL_PATH//\'/\'\'}');
 " 2>/dev/null &
 
+# .sh 파일을 Write로 생성한 경우 자동 chmod +x (non-blocking)
+TOOL_NAME="${INPUT#*\"tool_name\":\"}"
+TOOL_NAME="${TOOL_NAME%%\"*}"
+if [[ "$FILE_PATH" == *.sh ]] && [[ "$TOOL_NAME" == "Write" ]]; then
+    chmod +x "$FILE_PATH" 2>/dev/null &
+fi
+
 exit 0
