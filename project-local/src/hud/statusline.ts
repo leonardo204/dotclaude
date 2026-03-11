@@ -282,9 +282,15 @@ function renderContext(percent: number): string {
   return `ctx:${color}${percent}%${suffix}${C.reset}`;
 }
 
+// ── HUD disabled 체크 ──
+const HUD_DISABLED_FILE = join(homedir(), ".claude", ".hud_disabled");
+
 // ── Main ──
 async function main(): Promise<void> {
   try {
+    // HUD 비활성화 플래그 체크
+    if (existsSync(HUD_DISABLED_FILE)) return;
+
     const stdin = await readStdin();
     if (!stdin) return;
 

@@ -167,8 +167,10 @@ function renderContext(percent) {
   const suffix = percent >= 85 ? " CRITICAL" : percent >= 75 ? " COMPRESS?" : "";
   return `ctx:${color}${percent}%${suffix}${C.reset}`;
 }
+var HUD_DISABLED_FILE = join(homedir(), ".claude", ".hud_disabled");
 async function main() {
   try {
+    if (existsSync(HUD_DISABLED_FILE)) return;
     const stdin = await readStdin();
     if (!stdin) return;
     const parts = [];

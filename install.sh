@@ -206,6 +206,48 @@ mkdir -p "${DOTCLAUDE_DIR}/dist/hooks" "${DOTCLAUDE_DIR}/dist/hud" "${DOTCLAUDE_
 cp -r "${TMPDIR_CLONE}/project-local/dist/"* "${DOTCLAUDE_DIR}/dist/"
 ok "dist/ files installed."
 
+# ─── Step 4b: HUD scope selection ───
+echo ""
+printf "${BOLD}StatusLine HUD 설치 범위를 선택하세요:${RESET}\n"
+echo "  1) Global  — 모든 프로젝트에서 HUD 표시 (기본)"
+echo "  2) Project — dotclaude-init한 프로젝트에서만 HUD 표시"
+echo "  3) Skip    — HUD 설치 안 함"
+echo ""
+printf "선택 [1/2/3] (기본: 1): "
+read -r HUD_CHOICE </dev/tty 2>/dev/null || HUD_CHOICE="1"
+HUD_CHOICE="${HUD_CHOICE:-1}"
+
+case "${HUD_CHOICE}" in
+    2)
+        info "HUD를 프로젝트-로컬 전용으로 설정합니다..."
+        # global settings.json에서 statusLine 키 제거
+        node -e "
+          const fs = require('fs');
+          const p = '${DOTCLAUDE_DIR}/settings.json';
+          const s = JSON.parse(fs.readFileSync(p, 'utf8'));
+          delete s.statusLine;
+          fs.writeFileSync(p, JSON.stringify(s, null, 2) + '\n');
+        "
+        ok "HUD: 프로젝트-로컬 전용 (dotclaude-init 시 프로젝트별 설정)"
+        ;;
+    3)
+        info "HUD 설치를 건너뜁니다..."
+        node -e "
+          const fs = require('fs');
+          const p = '${DOTCLAUDE_DIR}/settings.json';
+          const s = JSON.parse(fs.readFileSync(p, 'utf8'));
+          delete s.statusLine;
+          fs.writeFileSync(p, JSON.stringify(s, null, 2) + '\n');
+        "
+        # HUD disabled 플래그 생성
+        touch "${DOTCLAUDE_DIR}/.hud_disabled"
+        ok "HUD: 건너뜀 (/dotclaude-statusline on 으로 활성화 가능)"
+        ;;
+    *)
+        ok "HUD: 글로벌 (모든 프로젝트에서 표시)"
+        ;;
+esac
+
 # ─── Step 5: Create marker file ───
 INSTALL_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 cat > "${DOTCLAUDE_DIR}/.dotclaude-installed" <<EOF

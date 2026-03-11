@@ -83,6 +83,7 @@ DOTCLAUDE_FILES=(
     "${DOTCLAUDE_DIR}/commands/dotclaude-init.md"
     "${DOTCLAUDE_DIR}/commands/dotclaude-update.md"
     "${DOTCLAUDE_DIR}/scripts/context-monitor.mjs"
+    "${DOTCLAUDE_DIR}/.hud_disabled"
 )
 
 for f in "${DOTCLAUDE_FILES[@]}"; do

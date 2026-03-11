@@ -379,6 +379,9 @@ function renderContext(percent) {
 // ── Main ──
 async function main() {
   try {
+    // HUD 비활성화 플래그 체크
+    if (existsSync(join(homedir(), ".claude", ".hud_disabled"))) return;
+
     const stdin = await readStdin();
     if (!stdin) return;
 
