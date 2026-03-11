@@ -153,6 +153,15 @@ if ! command -v node &>/dev/null; then
 fi
 ok "node found: $(node --version)"
 
+# --- node version check (>= 22 required) ---
+NODE_MAJOR=$(node -e "console.log(process.versions.node.split('.')[0])")
+if [ "${NODE_MAJOR}" -lt 22 ]; then
+    error "Node.js >= 22 required (found: $(node -v))."
+    error "Please upgrade Node.js: https://nodejs.org"
+    exit 1
+fi
+ok "Node.js version check passed (>= 22)."
+
 # ─── Step 2: Backup existing ~/.claude/ ───
 if [ -d "${DOTCLAUDE_DIR}" ]; then
     warn "Existing ~/.claude/ directory found."
@@ -186,6 +195,16 @@ info "Installing global settings to ~/.claude/ ..."
 mkdir -p "${DOTCLAUDE_DIR}"
 cp -r "${TMPDIR_CLONE}/global/"* "${DOTCLAUDE_DIR}/"
 ok "Global files installed."
+
+# ─── Step 4a: Install dist/ files from project-local ───
+info "Installing dist/ bridge and HUD files..."
+if [ ! -d "${TMPDIR_CLONE}/project-local/dist" ]; then
+  error "dist/ not found in repo. Build required before release."
+  exit 1
+fi
+mkdir -p "${DOTCLAUDE_DIR}/dist/hooks" "${DOTCLAUDE_DIR}/dist/hud" "${DOTCLAUDE_DIR}/dist/mcp"
+cp -r "${TMPDIR_CLONE}/project-local/dist/"* "${DOTCLAUDE_DIR}/dist/"
+ok "dist/ files installed."
 
 # ─── Step 5: Create marker file ───
 INSTALL_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")

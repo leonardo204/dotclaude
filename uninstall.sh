@@ -58,7 +58,8 @@ if [ "${FORCE}" = false ]; then
     echo "  ~/.claude/.dotclaude-installed"
     echo "  ~/.claude/commands/dotclaude-init.md"
     echo "  ~/.claude/commands/dotclaude-update.md"
-    echo "  ~/.claude/scripts/context-monitor.mjs"
+    echo "  ~/.claude/scripts/context-monitor.mjs  (legacy)"
+    echo "  ~/.claude/dist/  (bridge, HUD, MCP)"
     echo ""
     echo "Any other files in ~/.claude/ will be preserved."
     echo ""
@@ -92,6 +93,14 @@ for f in "${DOTCLAUDE_FILES[@]}"; do
         info "Not found (skipped): ${f}"
     fi
 done
+
+# ─── Remove dist/ directory ───
+if [ -d "${DOTCLAUDE_DIR}/dist" ]; then
+    rm -rf "${DOTCLAUDE_DIR}/dist"
+    ok "Removed: ${DOTCLAUDE_DIR}/dist/"
+else
+    info "Not found (skipped): ${DOTCLAUDE_DIR}/dist/"
+fi
 
 # ─── Clean up empty directories ───
 info "Cleaning up empty directories..."
