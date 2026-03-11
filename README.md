@@ -62,19 +62,150 @@ cd dotclaude && bash install.sh
 | **debugger** | 버그/에러 근본 원인 진단 | 불가 |
 | **test-engineer** | 테스트 전략 수립 + 테스트 코드 작성 | 가능 |
 
-**Ralph 에이전트**: 빌드 에러가 나면 고치고, 테스트가 실패하면 수정하고, 완료 조건이 충족될 때까지 반복합니다. "대략 동작합니다"를 허용하지 않습니다.
+#### 팀 모드 (구현 파이프라인)
 
-**구현 파이프라인**: "로그인 기능 추가해줘"처럼 규모 있는 요청을 받으면 에이전트들이 순서대로 자동 협업합니다.
+"로그인 기능 추가해줘"처럼 규모 있는 요청을 받으면 에이전트들이 팀으로 자동 협업합니다.
 
+```mermaid
+flowchart LR
+    User([사용자 요청]) --> P[planner<br/>계획 수립]
+    P -->|계획서| Approve1{사용자 승인}
+    Approve1 -->|승인| A[architect<br/>설계 검토]
+    Approve1 -->|수정 요청| P
+    A -->|승인| Approve2{사용자 승인}
+    A -->|REJECTED| P
+    Approve2 -->|승인| Impl
+
+    subgraph Impl [구현 단계]
+        R[ralph<br/>구현] ---|병렬| T[test-engineer<br/>테스트 작성]
+    end
+
+    Impl --> V[verifier<br/>검증]
+    V -->|PASS| Rev[reviewer<br/>코드 리뷰]
+    V -->|FAIL| D[debugger<br/>원인 진단]
+    D -->|수정 방향| R
+    Rev -->|LGTM| Done([완료])
+    Rev -->|재작업| R
 ```
-planner (계획) → architect (설계) → ralph + test-engineer (구현/테스트) → verifier (검증) → reviewer (리뷰)
+
+**팀 모드 발동 조건**:
+
+| 조건 | 예시 | 동작 |
+|------|------|------|
+| 새 기능 + 2개 이상 파일 수정 예상 | "로그인 기능 추가해줘" | 파이프라인 자동 제안 |
+| 아키텍처 변경 수반 | "인증을 JWT에서 세션으로 바꿔줘" | 파이프라인 자동 제안 |
+| "구현해줘/만들어줘" + 구체적 명세 | "댓글 시스템 구현해줘" | 파이프라인 자동 제안 |
+| `/dotclaude-implement` 명시 실행 | `/dotclaude-implement` | 즉시 파이프라인 실행 |
+| 단순 수정/버그 수정 | "이 에러 고쳐줘" | ralph 단독 또는 직접 처리 |
+
+#### 시나리오별 에이전트 동작
+
+**시나리오 1: 새 기능 구현** — "결제 시스템 구현해줘"
+
+```mermaid
+sequenceDiagram
+    participant U as 사용자
+    participant M as 메인
+    participant P as planner
+    participant A as architect
+    participant R as ralph
+    participant T as test-engineer
+    participant V as verifier
+    participant Rev as reviewer
+
+    U->>M: "결제 시스템 구현해줘"
+    M->>P: 태스크 분해 요청
+    P-->>M: 계획서 (5개 태스크)
+    M->>U: 계획 검토 요청
+    U->>M: 승인
+    M->>A: 설계 검토 요청
+    A-->>M: ✅ APPROVED
+    M->>U: 설계 검토 결과
+    U->>M: 승인
+
+    par 병렬 실행
+        M->>R: 구현 시작
+        M->>T: 테스트 작성
+    end
+
+    R-->>M: 구현 완료
+    T-->>M: 테스트 작성 완료
+    M->>V: 빌드/테스트 검증
+    V-->>M: ✅ PASS
+    M->>Rev: 코드 리뷰
+    Rev-->>M: ✅ LGTM
+    M->>U: 완료 보고
 ```
 
-계획과 설계 단계에서는 사용자 승인을 받고, 구현부터 리뷰까지는 자동으로 실행됩니다.
+**시나리오 2: 버그 수정** — "로그인 시 500 에러 발생"
 
-**MCP 팀 모드**: 여러 에이전트가 Context DB를 통해 실시간으로 정보를 공유합니다. `team_dispatch`로 워커 에이전트에게 태스크를 전달하고, `team_context`로 중간 결과를 공유합니다. 별도 설정 없이 기본 활성화되어 있습니다.
+```mermaid
+sequenceDiagram
+    participant U as 사용자
+    participant M as 메인
+    participant D as debugger
+    participant R as ralph
 
-**자동 트리거**: 파일 3개 이상 수정, 5단계 이상 작업, 아키텍처 변경이 감지되면 CLAUDE.md 지침에 따라 적절한 에이전트가 자동으로 선택됩니다.
+    U->>M: "로그인 시 500 에러 발생"
+    M->>D: 원인 진단 요청
+    D-->>M: 근본 원인 + 수정 방향
+    M->>R: 수정 요청 (진단 결과 전달)
+    R-->>M: 수정 완료 + 검증 증거
+    M->>U: 완료 보고
+```
+
+**시나리오 3: 검증 실패 → 자동 복구** — verifier가 FAIL을 반환한 경우
+
+```mermaid
+sequenceDiagram
+    participant R as ralph
+    participant V as verifier
+    participant D as debugger
+
+    R->>V: 구현 완료, 검증 요청
+    V-->>R: ❌ FAIL (테스트 3개 실패)
+    R->>D: 실패 로그 전달, 진단 요청
+    D-->>R: 원인: API 응답 형식 변경
+    R->>R: 코드 수정 (반복 2회차)
+    R->>V: 재검증 요청
+    V-->>R: ✅ PASS
+```
+
+**시나리오 4: 대규모 리팩토링** — ralph가 child agent를 생성하는 경우
+
+```mermaid
+flowchart TD
+    R[ralph<br/>전체 조율] --> Analysis[태스크 분석<br/>5개 태스크 식별]
+
+    Analysis --> Phase1
+
+    subgraph Phase1 [Phase 1 — 병렬 실행]
+        C1[child 1<br/>모듈 A 수정]
+        C2[child 2<br/>모듈 B 수정]
+        C3[child 3<br/>모듈 C 수정]
+    end
+
+    Phase1 --> Phase2[Phase 2 — 순차<br/>ralph: 통합 + 문서 업데이트]
+    Phase2 --> Phase3[Phase 3 — 순차<br/>ralph: 전체 빌드/테스트 검증]
+```
+
+#### 단독 에이전트 사용
+
+팀 모드가 아닌 개별 에이전트만 호출되는 경우:
+
+| 상황 | 호출 에이전트 | 예시 |
+|------|:------------:|------|
+| 단순 버그 수정 | ralph | "이 버튼 클릭 안 돼요" |
+| 코드 리뷰만 | reviewer | "이 PR 리뷰해줘" |
+| 테스트 보강 | test-engineer | "이 모듈 테스트 추가해줘" |
+| 원인 분석만 | debugger | "왜 빌드가 안 되는지 알려줘" |
+| 설계 피드백 | architect | "이 구조 괜찮을까?" |
+| 작업 계획만 | planner | "이거 하려면 뭘 해야 해?" |
+| 구현 완료 후 검증 | verifier | 구현 후 자동 호출 |
+
+**Ralph 에이전트**: 핵심 구현 에이전트. 빌드 에러가 나면 고치고, 테스트가 실패하면 수정하고, 완료 조건이 충족될 때까지 최대 10회 반복합니다. "대략 동작합니다"를 허용하지 않습니다.
+
+**MCP 팀 협업**: 여러 에이전트가 Context DB를 통해 실시간으로 정보를 공유합니다. `team_dispatch`로 워커 에이전트에게 태스크를 전달하고, `team_context`로 중간 결과를 공유합니다. 별도 설정 없이 기본 활성화되어 있습니다.
 
 ---
 
