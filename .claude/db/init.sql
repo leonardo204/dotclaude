@@ -58,6 +58,7 @@ CREATE TABLE IF NOT EXISTS tool_usage (
 );
 CREATE INDEX IF NOT EXISTS idx_tool_usage_tool ON tool_usage(tool_name);
 CREATE INDEX IF NOT EXISTS idx_tool_usage_file ON tool_usage(file_path);
+CREATE INDEX IF NOT EXISTS idx_tool_usage_session ON tool_usage(session_id);
 
 -- 사용자 프롬프트 로그 (discover 패턴 분석용)
 CREATE TABLE IF NOT EXISTS prompts (
