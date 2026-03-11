@@ -27,8 +27,7 @@ if [ "$CTX_ALERT" = "compacted" ]; then
     if [ -n "$CTX_RESTORED_AT" ] && [ "$CTX_RESTORED_AT" = "$CTX_UPDATED" ]; then
         # 이미 이 compaction에 대해 복구 완료 — 기본 모드로 전환
         echo '{"current":'"${CTX_CURRENT:-0}"',"previous":0,"peak":'"${CTX_CURRENT:-0}"',"alert":"none","updated":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'"}' > "$CTX_STATE"
-        SESSION_EDITS=$(sqlite3 "$DB_PATH" "SELECT COUNT(DISTINCT file_path) FROM tool_usage WHERE session_id=$SESSION_ID;" 2>/dev/null)
-        PENDING_TASKS=$(sqlite3 "$DB_PATH" "SELECT COUNT(*) FROM tasks WHERE status IN ('pending','in_progress');" 2>/dev/null)
+        read SESSION_EDITS PENDING_TASKS <<< $(sqlite3 "$DB_PATH" "SELECT COUNT(DISTINCT file_path) FROM tool_usage WHERE session_id=$SESSION_ID; SELECT COUNT(*) FROM tasks WHERE status IN ('pending','in_progress');" 2>/dev/null | tr '\n' ' ')
         echo "[ctx] Session #$SESSION_ID | Edits: $SESSION_EDITS files | Pending tasks: $PENDING_TASKS"
         echo "[rules] 한국어 · verify · agent≥3 · live-set · no-commit"
     else
@@ -83,8 +82,7 @@ elif [ "$CTX_ALERT" = "high" ]; then
 
 else
     # === 기본 모드 (최소 주입) ===
-    SESSION_EDITS=$(sqlite3 "$DB_PATH" "SELECT COUNT(DISTINCT file_path) FROM tool_usage WHERE session_id=$SESSION_ID;" 2>/dev/null)
-    PENDING_TASKS=$(sqlite3 "$DB_PATH" "SELECT COUNT(*) FROM tasks WHERE status IN ('pending','in_progress');" 2>/dev/null)
+    read SESSION_EDITS PENDING_TASKS <<< $(sqlite3 "$DB_PATH" "SELECT COUNT(DISTINCT file_path) FROM tool_usage WHERE session_id=$SESSION_ID; SELECT COUNT(*) FROM tasks WHERE status IN ('pending','in_progress');" 2>/dev/null | tr '\n' ' ')
 
     echo "[ctx] Session #$SESSION_ID | Edits: $SESSION_EDITS files | Pending tasks: $PENDING_TASKS"
     echo "[rules] 한국어 · verify · agent≥3 · live-set · no-commit"

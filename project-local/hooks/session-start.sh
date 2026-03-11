@@ -26,7 +26,7 @@ LAST_SESSION=$(sqlite3 "$DB_PATH" "SELECT start_time FROM sessions ORDER BY id D
 SESSION_ID=$(sqlite3 "$DB_PATH" "
     INSERT INTO sessions (start_time) VALUES ('$NOW');
     SELECT last_insert_rowid();
-    DELETE FROM live_context WHERE key IN ('working_files', 'error_context');
+    DELETE FROM live_context WHERE key IN ('working_files', 'error_context') OR key LIKE '_result:%' OR key LIKE '_task:%';
 ")
 
 # CLAUDE.md 지침 DB 캐시 — compaction 후 자동 복구용
