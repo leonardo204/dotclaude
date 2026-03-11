@@ -16,6 +16,7 @@ dotclaude 시스템 도움말을 출력합니다.
 | `/project:dotclaude-tellme` | 최근 작업 브리핑 + 다음 할 일 제안 |
 | `/project:dotclaude-discover` | Context DB 패턴 분석 → 자동화 가능한 패턴 발견 |
 | `/project:dotclaude-reportdb` | Context DB 전체 현황 리포트 |
+| `/project:dotclaude-statusline` | StatusLine HUD on/off 토글 |
 
 ## dotclaude 글로벌 명령어
 

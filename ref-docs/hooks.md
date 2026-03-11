@@ -6,9 +6,9 @@
 |------|------|------|
 | session-start.sh | SessionStart (세션 시작) | DB 초기화, 세션 기록, CLAUDE.md 지침 캐시, 7일+ 데이터 정리, 미완료 태스크 표시 |
 | on-prompt.sh | UserPromptSubmit (매 턴) | 3단계 차등 주입 (기본/경고/복구) |
-| post-tool-edit.sh | PostToolUse:Edit (파일 편집 후) | tool_usage에 편집 기록 (working_files·session_summary의 데이터 소스) |
+| post-tool-edit.sh | PostToolUse:Edit/Write (파일 편집 후) | tool_usage에 편집 기록 + .sh 파일 Write 시 auto chmod +x |
 | post-tool-bash.sh | PostToolUse:Bash (Bash 실행 후) | 에러 시에만 분류/로깅 + error_context 자동 캡처 |
-| on-stop.sh | Stop (세션 종료) | 세션 통계 업데이트 + session_summary 자동 저장 |
+| on-stop.sh | Stop (세션 종료) | 세션 통계 업데이트 + duration_minutes 자동 계산 + session_summary 저장 |
 
 ## stdout 가시성 제약
 
@@ -38,7 +38,7 @@
 
 ## 성능 최적화
 
-- post-tool-edit.sh: sqlite3 INSERT를 `&` (fire-and-forget)으로 실행
+- post-tool-edit.sh: sqlite3 INSERT를 `&` (fire-and-forget)으로 실행, .sh chmod도 `&` 백그라운드
 - post-tool-bash.sh: 에러 없으면 sqlite3 호출 자체를 스킵
 - on-prompt.sh 기본 모드: sqlite3 1회 blocking (서브쿼리 병합으로 fork 최소화)
 - session-start.sh: INSERT + DELETE를 단일 sqlite3 호출로 병합, CLAUDE.md 캐시는 non-blocking
