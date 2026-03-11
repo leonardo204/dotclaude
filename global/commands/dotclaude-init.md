@@ -160,6 +160,9 @@ cp "$SRC"/commands/*.md .claude/commands/
 
 # settings.json
 cp "$SRC"/settings.json .claude/settings.json
+
+# .mcp.json — MCP 서버 자동 시작 설정
+cp "$SRC"/.mcp.json .mcp.json
 ```
 
 ### 4단계: Context DB 초기화
@@ -342,6 +345,7 @@ rm -rf "$DOTCLAUDE_TMP"
 - .claude/dist/mcp/server.js (MCP 서버)
 - .claude/commands/ (5개 커스텀 명령어)
 - .claude/settings.json (Hook 등록 + HUD)
+- .mcp.json (MCP 서버 자동 시작 설정)
 - {DOC_ROOT}/claude/ (ref-docs 4개 — context-db, context-monitor, conventions, setup)
 - CLAUDE.md (PROJECT 섹션 작성 필요, ref-docs 경로 치환 완료)
 

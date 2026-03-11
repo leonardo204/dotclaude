@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "dotclaude": {
+      "command": "node",
+      "args": ["--no-warnings=ExperimentalWarning", ".claude/dist/mcp/server.js"]
+    }
+  }
+}

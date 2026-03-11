@@ -180,6 +180,9 @@ cp -r "$SRC"/dist/mcp/* .claude/dist/mcp/
 
 # Commands — 클린 교체
 cp "$SRC"/commands/*.md .claude/commands/
+
+# .mcp.json — MCP 서버 자동 시작 설정 (클린 교체)
+cp "$SRC"/.mcp.json .mcp.json
 ```
 
 ### 5단계: settings.json 처리
@@ -351,6 +354,7 @@ rm -rf "$DOTCLAUDE_TMP"
 - .claude/commands/ (시스템 5개 + 프로젝트 고유 N개 보존)
 - .claude/db/ (init.sql, helper.sh — context.db 유지)
 - .claude/settings.json (시스템 hooks + 프로젝트 고유 설정 머지)
+- .mcp.json (MCP 서버 자동 시작 설정)
 - {DOC_ROOT}/claude/ (ref-docs 4개 — context-db, context-monitor, conventions, setup)
 - CLAUDE.md (글로벌 참조 안내 + PROJECT=보존, ref-docs 경로 치환 완료)
 

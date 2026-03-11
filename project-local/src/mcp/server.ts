@@ -1,7 +1,7 @@
 /**
  * MCP Server — dotclaude Context DB MCP 서버
  *
- * Claude Code settings.json의 mcpServers 섹션에 등록하여 사용:
+ * 프로젝트 루트의 .mcp.json에 등록되어 자동 시작됨:
  *
  *   "mcpServers": {
  *     "dotclaude": {
@@ -10,8 +10,7 @@
  *     }
  *   }
  *
- * 선택적 기능 — 활성화하려면 위 설정을 Claude Code settings.json에 추가한다.
- * 기본값: 비활성 (비활성 시 기존 hook 기능에 영향 없음)
+ * 기본 활성화 — .mcp.json에 포함되어 Claude Code 시작 시 자동으로 실행됨.
  *
  * 환경변수:
  *   PROJECT_ROOT — 프로젝트 루트 경로 (미지정 시 자동 탐색)
