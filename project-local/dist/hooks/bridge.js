@@ -568,6 +568,7 @@ function getPendingCount(db) {
 }
 
 // src/hooks/events/post-edit.ts
+import { chmodSync } from "node:fs";
 async function handlePostEdit({ projectRoot, db, stdinData }) {
   if (!stdinData) return;
   let input;
@@ -582,6 +583,12 @@ async function handlePostEdit({ projectRoot, db, stdinData }) {
   const sessionId = db.sessionCurrent();
   if (sessionId > 0) {
     db.toolLog(sessionId, "Edit", relPath);
+  }
+  if (filePath.endsWith(".sh") && input.tool_name === "Write") {
+    try {
+      chmodSync(filePath, 493);
+    } catch {
+    }
   }
 }
 
@@ -628,9 +635,25 @@ async function handleStopSession({ db }) {
     filesChanged = db.sessionEditCount(sessionId);
   } catch {
   }
+  let durationMinutes;
+  try {
+    const session = db.sessionInfo(sessionId);
+    if (session?.start_time) {
+      const startMs = new Date(session.start_time).getTime();
+      durationMinutes = Math.round((Date.now() - startMs) / 6e4);
+    }
+  } catch {
+  }
   const now = (/* @__PURE__ */ new Date()).toISOString().replace("T", " ").slice(0, 19);
   try {
-    db.sessionUpdate(sessionId, { end_time: now, files_changed: filesChanged });
+    const updateData = {
+      end_time: now,
+      files_changed: filesChanged
+    };
+    if (durationMinutes !== void 0) {
+      updateData.duration_minutes = durationMinutes;
+    }
+    db.sessionUpdate(sessionId, updateData);
   } catch {
   }
   try {

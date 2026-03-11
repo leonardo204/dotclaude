@@ -22,10 +22,29 @@ export async function handleStopSession({ db }: StopSessionInput): Promise<void>
     // 무시
   }
 
-  // 세션 업데이트
+  // duration_minutes 계산
+  let durationMinutes: number | undefined;
+  try {
+    const session = db.sessionInfo(sessionId);
+    if (session?.start_time) {
+      const startMs = new Date(session.start_time).getTime();
+      durationMinutes = Math.round((Date.now() - startMs) / 60000);
+    }
+  } catch {
+    // 무시
+  }
+
+  // 세션 업데이트 (end_time + files_changed + duration_minutes 한 번에)
   const now = new Date().toISOString().replace('T', ' ').slice(0, 19);
   try {
-    db.sessionUpdate(sessionId, { end_time: now, files_changed: filesChanged });
+    const updateData: Partial<Omit<import('../../shared/types.js').SessionInfo, 'id'>> = {
+      end_time: now,
+      files_changed: filesChanged,
+    };
+    if (durationMinutes !== undefined) {
+      updateData.duration_minutes = durationMinutes;
+    }
+    db.sessionUpdate(sessionId, updateData);
   } catch {
     // 무시
   }

@@ -14,9 +14,22 @@ NOW=$(date '+%Y-%m-%d %H:%M:%S')
     SESSION_ID=$(sqlite3 "$DB_PATH" "SELECT id FROM sessions ORDER BY id DESC LIMIT 1;" 2>/dev/null)
     [ -z "$SESSION_ID" ] && exit 0
 
+    # duration_minutes 계산
+    START_TIME=$(sqlite3 "$DB_PATH" "SELECT start_time FROM sessions WHERE id=$SESSION_ID;" 2>/dev/null)
+    DURATION_MIN=""
+    if [ -n "$START_TIME" ]; then
+        START_EPOCH=$(date -j -f '%Y-%m-%d %H:%M:%S' "$START_TIME" '+%s' 2>/dev/null || date -d "$START_TIME" '+%s' 2>/dev/null)
+        NOW_EPOCH=$(date '+%s')
+        if [ -n "$START_EPOCH" ] && [ -n "$NOW_EPOCH" ]; then
+            DURATION_MIN=$(( (NOW_EPOCH - START_EPOCH) / 60 ))
+        fi
+    fi
+
     # 세션 업데이트 + 파일 수/목록 조회를 단일 호출로
+    DURATION_SQL=""
+    [ -n "$DURATION_MIN" ] && DURATION_SQL=", duration_minutes=$DURATION_MIN"
     QUERY_RESULT=$(sqlite3 -separator '|' "$DB_PATH" "
-        UPDATE sessions SET end_time='$NOW', files_changed=(SELECT COUNT(DISTINCT file_path) FROM tool_usage WHERE session_id=$SESSION_ID) WHERE id=$SESSION_ID;
+        UPDATE sessions SET end_time='$NOW', files_changed=(SELECT COUNT(DISTINCT file_path) FROM tool_usage WHERE session_id=$SESSION_ID)${DURATION_SQL} WHERE id=$SESSION_ID;
         SELECT
             (SELECT COUNT(DISTINCT file_path) FROM tool_usage WHERE session_id=$SESSION_ID),
             (SELECT GROUP_CONCAT(file_path, ', ') FROM (SELECT DISTINCT file_path FROM tool_usage WHERE session_id=$SESSION_ID ORDER BY id DESC LIMIT 10));
