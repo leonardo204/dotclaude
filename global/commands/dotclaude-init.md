@@ -52,12 +52,13 @@ for f in "$SRC"/agents/*.md; do
     fi
 done
 
-# 시스템 hook 중 프로젝트에서 커스터마이징한 것
-for f in "$SRC"/hooks/*.sh; do
-    name=$(basename "$f")
-    if [ -f ".claude/hooks/$name" ]; then
-        if ! diff -q "$f" ".claude/hooks/$name" >/dev/null 2>&1; then
-            echo "[변경됨] hooks/$name"
+# 시스템 dist/ 파일 중 프로젝트에서 커스터마이징한 것
+for f in "$SRC"/dist/hooks/* "$SRC"/dist/hud/* "$SRC"/dist/mcp/*; do
+    [ -f "$f" ] || continue
+    rel="${f#$SRC/}"
+    if [ -f ".claude/$rel" ]; then
+        if ! diff -q "$f" ".claude/$rel" >/dev/null 2>&1; then
+            echo "[변경됨] $rel"
         fi
     fi
 done
@@ -81,14 +82,6 @@ for f in .claude/agents/*.md; do
     name=$(basename "$f" .md)
     if ! echo "$SYS_AGENTS" | grep -qw "$name"; then
         echo "[프로젝트 고유] agents/$name.md"
-    fi
-done
-
-SYS_HOOKS="session-start on-prompt post-tool-edit post-tool-bash on-stop ralph-persist"
-for f in .claude/hooks/*.sh; do
-    name=$(basename "$f" .sh)
-    if ! echo "$SYS_HOOKS" | grep -qw "$name"; then
-        echo "[프로젝트 고유] hooks/$name.sh"
     fi
 done
 
@@ -142,7 +135,7 @@ cat "$SRC/settings.json"
 ### 2단계: 디렉토리 구조 생성
 
 ```bash
-mkdir -p .claude/agents .claude/db .claude/hooks .claude/commands .claude/scripts
+mkdir -p .claude/agents .claude/db .claude/dist/hooks .claude/dist/hud .claude/dist/mcp .claude/commands
 ```
 
 ### 3단계: 파일 복사 (project-local → .claude/)
@@ -157,15 +150,13 @@ cp "$SRC"/agents/*.md .claude/agents/
 cp "$SRC"/db/init.sql .claude/db/
 cp "$SRC"/db/helper.sh .claude/db/
 
-# Hooks (6개)
-cp "$SRC"/hooks/*.sh .claude/hooks/
-chmod +x .claude/hooks/*.sh
+# dist/ — bridge (hooks), HUD, MCP 서버
+cp -r "$SRC"/dist/hooks/* .claude/dist/hooks/
+cp -r "$SRC"/dist/hud/* .claude/dist/hud/
+cp -r "$SRC"/dist/mcp/* .claude/dist/mcp/
 
 # Commands (5개)
 cp "$SRC"/commands/*.md .claude/commands/
-
-# HUD 스크립트
-cp "$SRC"/scripts/context-monitor.mjs .claude/scripts/
 
 # settings.json
 cp "$SRC"/settings.json .claude/settings.json
@@ -288,31 +279,32 @@ fi
 
 ### 7단계: HUD 설치
 
-사용자에게 HUD 설치 위치 확인:
+HUD는 `dist/hud/statusline.js`를 통해 동작하며, settings.json에 이미 포함되어 있다.
+별도 스크립트 복사 없이 settings.json의 statusLine 설정으로 자동 활성화된다.
+
+사용자에게 HUD 설치 범위 확인:
 
 ```
-HUD 설치 위치를 선택하세요:
+HUD 설치 범위를 선택하세요:
 (A) Global 설치 (권장) — 모든 프로젝트에서 동일 HUD
+    (~/.claude/settings.json의 statusLine 사용)
 (B) Project 설치 — 이 프로젝트에서만
+    (.claude/settings.json의 statusLine 사용 — 이미 포함됨)
 (C) 스킵 — 기존 설정 유지
 ```
 
 **참고**: Project statusLine은 Global을 완전 대체함.
 
 **(A) Global 설치:**
-```bash
-mkdir -p ~/.claude/scripts
-cp "$SRC"/scripts/context-monitor.mjs ~/.claude/scripts/
-```
 `~/.claude/settings.json`에 statusLine 추가 (기존 설정 보존, statusLine만 머지):
 ```json
-{ "statusLine": { "type": "command", "command": "node ~/.claude/scripts/context-monitor.mjs", "padding": 2 } }
+{ "statusLine": { "type": "command", "command": "node --no-warnings=ExperimentalWarning ~/.claude/dist/hud/statusline.js", "padding": 2 } }
 ```
 
 **(B) Project 설치:**
-`.claude/settings.json`에 statusLine 추가:
+`.claude/settings.json`에 이미 포함됨 (추가 작업 불필요):
 ```json
-{ "statusLine": { "type": "command", "command": "node .claude/scripts/context-monitor.mjs", "padding": 2 } }
+{ "statusLine": { "type": "command", "command": "node --no-warnings=ExperimentalWarning .claude/dist/hud/statusline.js", "padding": 2 } }
 ```
 
 **(C) 스킵:** 설정 변경 없음.
@@ -345,10 +337,11 @@ rm -rf "$DOTCLAUDE_TMP"
 생성된 파일:
 - .claude/agents/ (7개 커스텀 에이전트)
 - .claude/db/ (Context DB + Helper CLI)
-- .claude/hooks/ (6개 자동 실행 스크립트)
+- .claude/dist/hooks/bridge.js (Hook 브릿지)
+- .claude/dist/hud/ (HUD statusline)
+- .claude/dist/mcp/server.js (MCP 서버)
 - .claude/commands/ (5개 커스텀 명령어)
-- .claude/scripts/ (HUD statusline)
-- .claude/settings.json (Hook 등록)
+- .claude/settings.json (Hook 등록 + HUD)
 - {DOC_ROOT}/claude/ (ref-docs 4개 — context-db, context-monitor, conventions, setup)
 - CLAUDE.md (PROJECT 섹션 작성 필요, ref-docs 경로 치환 완료)
 

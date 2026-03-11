@@ -47,12 +47,13 @@ for f in "$SRC"/agents/*.md; do
     fi
 done
 
-# 시스템 hook 중 프로젝트에서 커스터마이징한 것
-for f in "$SRC"/hooks/*.sh; do
-    name=$(basename "$f")
-    if [ -f ".claude/hooks/$name" ]; then
-        if ! diff -q "$f" ".claude/hooks/$name" >/dev/null 2>&1; then
-            echo "[변경됨] hooks/$name"
+# 시스템 dist/ 파일 중 프로젝트에서 커스터마이징한 것
+for f in "$SRC"/dist/hooks/* "$SRC"/dist/hud/* "$SRC"/dist/mcp/*; do
+    [ -f "$f" ] || continue
+    rel="${f#$SRC/}"
+    if [ -f ".claude/$rel" ]; then
+        if ! diff -q "$f" ".claude/$rel" >/dev/null 2>&1; then
+            echo "[변경됨] $rel"
         fi
     fi
 done
@@ -79,15 +80,6 @@ for f in .claude/agents/*.md; do
     name=$(basename "$f" .md)
     if ! echo "$SYS_AGENTS" | grep -qw "$name"; then
         echo "[프로젝트 고유] agents/$name.md"
-    fi
-done
-
-# 시스템 hook 이름 목록
-SYS_HOOKS="session-start on-prompt post-tool-edit post-tool-bash on-stop ralph-persist"
-for f in .claude/hooks/*.sh; do
-    name=$(basename "$f" .sh)
-    if ! echo "$SYS_HOOKS" | grep -qw "$name"; then
-        echo "[프로젝트 고유] hooks/$name.sh"
     fi
 done
 
@@ -141,7 +133,7 @@ cat "$SRC/settings.json"
 
 ### 커스터마이징된 시스템 파일 (교체 시 변경사항 유실)
 - agents/reviewer.md — 프로젝트 맞춤 리뷰 기준 포함
-- hooks/on-prompt.sh — 커스텀 컨텍스트 주입 로직 추가
+- dist/hooks/bridge.js — 커스텀 훅 로직 추가
 (없으면: "커스터마이징 없음 ✅")
 
 ### 프로젝트 고유 파일 (영향 없음 — 보존됨)
@@ -172,7 +164,7 @@ cat "$SRC/settings.json"
 사용자 승인 후 실행.
 
 ```bash
-mkdir -p .claude/agents .claude/db .claude/hooks .claude/commands .claude/scripts
+mkdir -p .claude/agents .claude/db .claude/dist/hooks .claude/dist/hud .claude/dist/mcp .claude/commands
 
 # 에이전트 — 클린 교체
 cp "$SRC"/agents/*.md .claude/agents/
@@ -181,15 +173,13 @@ cp "$SRC"/agents/*.md .claude/agents/
 cp "$SRC"/db/init.sql .claude/db/
 cp "$SRC"/db/helper.sh .claude/db/
 
-# Hooks — 클린 교체
-cp "$SRC"/hooks/*.sh .claude/hooks/
-chmod +x .claude/hooks/*.sh
+# dist/ — bridge (hooks), HUD, MCP 서버 — 클린 교체
+cp -r "$SRC"/dist/hooks/* .claude/dist/hooks/
+cp -r "$SRC"/dist/hud/* .claude/dist/hud/
+cp -r "$SRC"/dist/mcp/* .claude/dist/mcp/
 
 # Commands — 클린 교체
 cp "$SRC"/commands/*.md .claude/commands/
-
-# HUD 스크립트 — 클린 교체
-cp "$SRC"/scripts/context-monitor.mjs .claude/scripts/
 ```
 
 ### 5단계: settings.json 처리
@@ -355,10 +345,11 @@ rm -rf "$DOTCLAUDE_TMP"
 
 클린 설치:
 - .claude/agents/ (시스템 7개 + 프로젝트 고유 N개 보존)
-- .claude/hooks/ (시스템 6개 + 프로젝트 고유 N개 보존)
+- .claude/dist/hooks/bridge.js (Hook 브릿지)
+- .claude/dist/hud/ (HUD statusline)
+- .claude/dist/mcp/server.js (MCP 서버)
 - .claude/commands/ (시스템 5개 + 프로젝트 고유 N개 보존)
 - .claude/db/ (init.sql, helper.sh — context.db 유지)
-- .claude/scripts/ (context-monitor.mjs)
 - .claude/settings.json (시스템 hooks + 프로젝트 고유 설정 머지)
 - {DOC_ROOT}/claude/ (ref-docs 4개 — context-db, context-monitor, conventions, setup)
 - CLAUDE.md (글로벌 참조 안내 + PROJECT=보존, ref-docs 경로 치환 완료)
