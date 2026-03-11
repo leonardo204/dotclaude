@@ -1,4 +1,4 @@
-# Context Monitor & HUD (Compaction 대응 + Statusline)
+# Context Monitor — HUD statusline + compaction 감지/복구 시스템
 
 ## 개요
 

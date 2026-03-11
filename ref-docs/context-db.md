@@ -1,4 +1,4 @@
-# Project Context DB (SQLite)
+# Context DB — SQLite 기반 세션/태스크/결정 저장소. helper.sh CLI로 조작
 
 ## 개요
 

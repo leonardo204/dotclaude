@@ -2,155 +2,35 @@
 
 ## Core Principles
 
-### 언어 정책
-
-- **모든 대화, 리포트, 설명은 한국어**로 진행 (코드/커밋 메시지 제외)
-
-### Documentation-First
-
-SDK/API/프레임워크 구현 전 공식 문서를 먼저 확인한다.
-Context7 MCP 사용 가능 시: `resolve-library-id` → `query-docs` 순서로 최신 문서 조회.
-필드명, API 계약을 추측하지 않는다.
-
-### Verification (Iron Law)
-
-**완료 선언 전 반드시 검증 증거를 확보한다.**
-
-1. 완료를 증명할 수 있는 것이 무엇인지 파악
-2. 검증 실행 (테스트, 빌드, 타입체크 등)
-3. 출력 확인
-4. 증거와 함께 완료 선언
-
-### Continuation Enforcement
-
-작업 종료 전 확인: 미완료 태스크 0, 기능 정상 동작, 테스트 통과, 에러 0.
-**하나라도 미확인이면 계속 작업한다.**
+- 한국어로 대화 (코드/커밋 제외)
+- Documentation-First: 구현 전 공식 문서 확인. Context7 MCP: `resolve-library-id` → `query-docs`
+- Verification: 완료 선언 전 검증 증거(빌드/테스트/타입체크) 필수
+- Continuation: 미완료 태스크, 미통과 테스트, 에러가 있으면 계속 작업
 
 ---
 
 ## Agent Delegation
 
-**메인 컨텍스트는 사용자 대화 + 판단 + 위임에 집중한다. 실행은 Agent에 맡긴다.**
+- 메인 컨텍스트는 판단 + 위임. 실행은 Agent에 맡긴다
+- 필수 Agent: 파일 3개+, 멀티스텝 5+, 복잡한 구현, 코드베이스 탐색(Explore), 장시간 작업(background)
+- 직접 처리: 단일 파일, 특정 검색, 즉답, 1-2단계 작업
+- 커스텀 에이전트: `subagent_type: "general-purpose"` + 프롬프트에 `.claude/agents/<name>.md` Read
+- 파이프라인: planner → architect → ralph + test-engineer → verifier → reviewer
+- 파이프라인 자동 트리거: 새 기능+2파일 이상 / 아키텍처 변경 / "구현해줘"+구체적 명세
 
-### 필수 트리거 — 이 조건에 해당하면 반드시 Agent 생성
-
-| 트리거 조건 | Agent 유형 | 이유 |
-|-------------|-----------|------|
-| 파일 3개 이상 읽기/수정 필요 | `general-purpose` | 컨텍스트 보호 |
-| 멀티스텝 실행 (5단계 이상) | `general-purpose` | 자율 실행이 효율적 |
-| 복잡한 기능 구현 (아래 자동 감지) | 구현 파이프라인 | 다중 에이전트 협업 |
-| `/dotclaude-init`, `/dotclaude-update` | `general-purpose` | repo 클론+파일 복사+검증 |
-| 코드베이스 구조 파악 | `Explore` | 탐색 특화 |
-| 독립 작업 2개 이상 동시 | Agent 병렬 생성 | 처리량 극대화 |
-| 빌드/테스트/설치 등 장시간 | Agent (`run_in_background`) | 블로킹 방지 |
-
-### 직접 처리 — Agent 불필요
-
-| 상황 | 접근 |
-|------|------|
-| 단일 파일 읽기/수정 | Read, Edit |
-| 특정 클래스/함수 검색 | Glob, Grep |
-| 사용자 질문에 즉답 | 직접 응답 |
-| 간단한 1-2단계 작업 | 직접 실행 |
-
-### 위임 패턴
-
-**DB 핸드오프 프로토콜 (기본)**:
-```
-메인: helper.sh agent-task <name> "태스크 내용" → DB에 저장
-메인: Agent(prompt: ".claude/agents/<name>.md의 지침을 따라 작업하라. 태스크: <name>")
-Agent: DB에서 태스크 조회 → 실행 → DB에 결과 보고
-메인: helper.sh agent-result <name> → 결과 확인
-```
-
-**프롬프트 직접 전달 (단순 작업)**:
-태스크가 1-2줄로 충분한 경우, DB 핸드오프 없이 프롬프트에 직접 포함해도 된다.
-
-**병렬 실행:**
-- 독립 작업 2개 이상 → 단일 메시지에 Agent 도구 여러 개 호출
-- 의존 관계 있으면 → 순차 실행
-
-**Agent 간 컨텍스트 공유:**
-```
-Agent A: helper.sh agent-context <key> "공유 정보" → DB에 저장
-Agent B: helper.sh agent-context <key> → DB에서 조회
-```
-
-### 커스텀 에이전트 (`.claude/agents/`)
-
-**호출 방법**: `subagent_type: "general-purpose"`로 Agent 생성 후, 프롬프트 첫 줄에 `.claude/agents/<name>.md`를 Read하여 지침을 포함시킨다. `subagent_type`에 커스텀 이름을 직접 지정하면 에러 발생.
-
-| 에이전트 | 역할 | 모델 | 수정 권한 |
-|----------|------|:----:|:---------:|
-| `planner` | 요청 분석 → 태스크 분해 + 수용 기준 정의 | sonnet | ❌ |
-| `architect` | 설계/구현 검토 + 아키텍처 타당성 검증 | sonnet | ❌ |
-| `ralph` | 끈질긴 구현 — 완료+검증될 때까지 절대 중단 안 함 | sonnet | ✅ |
-| `verifier` | 빌드/테스트/타입체크 증거 기반 검증 | haiku | ❌ |
-| `reviewer` | 코드 리뷰 — 보안/정확성/품질 | sonnet | ❌ |
-| `debugger` | 버그/에러 근본 원인 진단 | sonnet | ❌ |
-| `test-engineer` | 테스트 전략 수립 + 테스트 코드 작성 | sonnet | ✅ |
-
-**예시**:
-```
-Agent(subagent_type: "general-purpose", prompt: "
-.claude/agents/ralph.md의 지침을 따라 작업하라.
-[태스크 내용...]
-")
-```
-
-### 구현 파이프라인
-
-```
-요청 → planner → 승인 → architect → 승인 → ralph + test-engineer → verifier → reviewer → 완료
-```
-- 계획/설계: 사용자 승인 루프
-- 구현/검증/리뷰: 자동 실행, 실패 시 debugger 진단 → ralph 재진입
-
-**자동 트리거 조건** — `/project:dotclaude-implement` 명시 실행뿐 아니라, 아래 조건 감지 시 자동으로 파이프라인을 제안하거나 실행:
-
-| 감지 패턴 | 예시 | 동작 |
-|-----------|------|------|
-| 새 기능 구현 요청 + 2개 이상 파일 수정 예상 | "로그인 기능 추가해줘" | 파이프라인 제안 → 승인 시 실행 |
-| 아키텍처 변경이 수반되는 요청 | "인증을 JWT에서 세션으로 바꿔줘" | 파이프라인 제안 |
-| "구현해줘", "만들어줘" + 구체적 기능 명세 | "댓글 시스템 구현해줘" | 파이프라인 제안 |
-| 단순 수정/버그픽스 | "이 에러 고쳐줘", "버튼 색상 변경" | 직접 처리 또는 ralph 단독 |
-
-**판단 기준**: 계획+설계가 필요한 규모인가? → Yes면 파이프라인, No면 직접/ralph
+→ 상세: ref-docs/agent-delegation.md
 
 ---
 
-## Broad Request Detection
+## Context 저장
 
-요청이 **모호한 경우**: 대상 없는 추상적 동사, 특정 파일/함수 미지정, 3개 이상 영역에 걸침, 명확한 산출물 없는 한 문장.
+- 작업 시작: `live-set current_task "설명"`
+- 핵심 발견: `live-set key_findings "내용"`
+- 설계 결정: `decision-add "설명" "이유"`
+- Hook 자동: working_files, error_context, session_summary
+- `<remember>정보</remember>` (7일) / `<remember priority>정보</remember>` (영구)
 
-**대응**: 탐색(Explore) → 계획(Plan) → 구현 순서로 진행.
-
----
-
-## Context 저장 규칙
-
-**컨텍스트 절약의 핵심: 작업 맥락을 DB에 저장하고, 대화 히스토리 의존을 줄인다.**
-
-### 필수 저장 트리거
-
-| 시점 | 명령 | 예시 |
-|------|------|------|
-| 새 작업 시작 | `live-set current_task "..."` | `live-set current_task "Hook 성능 최적화"` |
-| 핵심 발견 | `live-set key_findings "..."` | `live-set key_findings "python3 177ms → jq 4ms"` |
-| 설계 결정 | `decision-add "..."` | `decision-add "git rev-parse 캐시 도입" "매 턴 152ms 절감"` |
-| 작업 전환 | `live-set current_task "..."` | 이전 태스크 → 새 태스크로 갱신 |
-
-### 자동 저장 (Hook)
-
-- `working_files` — 세션 시작 시 리셋, 편집마다 자동 추가
-- `error_context` — 세션 시작 시 리셋, 에러 시 자동 덮어쓰기
-- `session_summary` — 세션 종료 시 자동 저장
-
-### `<remember>` 태그
-
-`<remember>` 태그로 세션 간 정보 보존:
-- `<remember>정보</remember>` — 7일 유지
-- `<remember priority>정보</remember>` — 영구 유지
+→ 상세: ref-docs/context-db.md
 
 ---
 
@@ -163,49 +43,24 @@ Agent(subagent_type: "general-purpose", prompt: "
 
 ## Project Setup
 
-### 새 프로젝트 (`/dotclaude-init`)
-- `.claude/` 폴더가 없는 새 프로젝트에서 실행
-- Context DB, Hooks, Commands, HUD 템플릿 자동 생성
-- 이후 CLAUDE.md의 PROJECT 섹션을 프로젝트에 맞게 작성
-
-### 기존 프로젝트 업데이트 (`/dotclaude-update`)
-- 이미 `.claude/`나 CLAUDE.md가 있는 프로젝트에서 실행
-- 충돌 영향 분석 후 시스템 파일을 최신으로 클린 교체 (프로젝트 고유 파일 보존)
-- CLAUDE.md의 PROJECT 섹션 보존
+- `/dotclaude-init`: 새 프로젝트 — .claude/ 환경 자동 생성
+- `/dotclaude-update`: 기존 프로젝트 — 시스템 파일 최신 업데이트 (PROJECT 섹션 보존)
 
 ---
 
-## 프로젝트 공통 시스템
+## 시스템 참조
 
-### Context DB (SQLite)
+- Context DB: `.claude/db/context.db` + `helper.sh` → ref-docs/context-db.md
+- Context Monitor: compaction 대응 + HUD → ref-docs/context-monitor.md
+- Hooks: 5개 자동 실행 스크립트 → ref-docs/hooks.md
+- 컨벤션: 커밋, 주석, 로깅 → ref-docs/conventions.md
+- 셋업: 새 환경 설정 → ref-docs/setup.md
 
-프로젝트별 `.claude/db/context.db`로 세션 간 작업 추적.
+---
 
-- Helper: `bash .claude/db/helper.sh <command>`
-- 주요 명령: `ctx-get/set`, `task-add/list/done`, `decision-add`, `error-log`, `live-set/append/get/dump`, `stats`
-- 세션 시작 시 Hook이 자동으로 DB 초기화 + 세션 기록
-- **커밋 정책**: `context.db`는 휘발성 런타임 데이터 — `.gitignore`에 포함되어 git 미추적. 커밋 대상은 `init.sql`(스키마)과 `helper.sh`(CLI)만 해당
+## Slim 정책
 
-### Context Monitor (compaction 대응)
-
-- `.claude/scripts/context-monitor.mjs` → 매 턴 컨텍스트 사용률 캡처
-- ctx >= 70% → "상태 저장" 리마인더 주입
-- compaction 감지 → `live_context` 테이블에서 자동 복구
-
-### Live Context 관리
-
-Hook이 자동으로 핵심 상태를 캡처한다:
-- `working_files` — 편집 파일 경로 (ctx 70%+ 시 on-prompt.sh가 tool_usage에서 자동 저장)
-- `error_context` — 최근 에러 정보 (post-tool-bash.sh가 자동 덮어쓰기)
-- `session_summary` — 세션 편집 요약 (on-stop.sh가 자동 저장)
-- `current_task`, `key_findings` — 수동 저장 (`live-set`)
-
-### Hooks (자동 실행)
-
-| Hook | 시점 | 역할 |
-|------|------|------|
-| session-start.sh | 세션 시작 | DB 초기화, 세션 기록, CLAUDE.md 지침 캐시, 미완료 태스크 표시 |
-| on-prompt.sh | 매 턴 | 3단계 차등 주입 (기본/경고/복구) |
-| post-tool-edit.sh | 파일 편집 후 | tool_usage에 편집 기록 (working_files·session_summary의 데이터 소스) |
-| post-tool-bash.sh | Bash 실행 후 | 에러 시에만 분류/로깅 + error_context 자동 캡처 |
-| on-stop.sh | 세션 종료 | 세션 통계 업데이트 + session_summary 자동 저장 |
+CLAUDE.md는 **100줄 이하**를 유지한다. 새 지침 추가 시:
+1. 매 턴 참조 필요 → CLAUDE.md에 1줄 추가
+2. 상세/예시/테이블 → ref-docs/*.md에 작성 후 참조
+3. ref-docs 헤더 형식: `# 제목 — 한 줄 설명` (필요 문서 빠르게 식별용)
