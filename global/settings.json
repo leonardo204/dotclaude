@@ -1,13 +1,71 @@
 {
   "statusLine": {
     "type": "command",
-    "command": "node ~/.claude/scripts/context-monitor.mjs",
+    "command": "node --no-warnings=ExperimentalWarning ~/.claude/dist/hud/statusline.js",
     "padding": 2
   },
-  "enabledPlugins": {
-    "swift-lsp@claude-plugins-official": true,
-    "rust-analyzer-lsp@claude-plugins-official": true,
-    "github@claude-plugins-official": true,
-    "claude-md-management@claude-plugins-official": true
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "HOOK_EVENT=session-start node --no-warnings=ExperimentalWarning \"$(git rev-parse --show-toplevel 2>/dev/null || echo .)/.claude/dist/hooks/bridge.js\""
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "HOOK_EVENT=prompt node --no-warnings=ExperimentalWarning \"$(cat .claude/.project_root 2>/dev/null || git rev-parse --show-toplevel 2>/dev/null || echo .)/.claude/dist/hooks/bridge.js\""
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "HOOK_EVENT=post-edit node --no-warnings=ExperimentalWarning \"$(cat .claude/.project_root 2>/dev/null || git rev-parse --show-toplevel 2>/dev/null || echo .)/.claude/dist/hooks/bridge.js\""
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "HOOK_EVENT=post-bash node --no-warnings=ExperimentalWarning \"$(cat .claude/.project_root 2>/dev/null || git rev-parse --show-toplevel 2>/dev/null || echo .)/.claude/dist/hooks/bridge.js\""
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "HOOK_EVENT=stop-session node --no-warnings=ExperimentalWarning \"$(cat .claude/.project_root 2>/dev/null || git rev-parse --show-toplevel 2>/dev/null || echo .)/.claude/dist/hooks/bridge.js\""
+          }
+        ]
+      },
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "HOOK_EVENT=stop-ralph node --no-warnings=ExperimentalWarning \"$(cat .claude/.project_root 2>/dev/null || git rev-parse --show-toplevel 2>/dev/null || echo .)/.claude/dist/hooks/bridge.js\""
+          }
+        ]
+      }
+    ]
   }
 }

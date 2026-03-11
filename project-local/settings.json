@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; echo \"$ROOT\" > \"$ROOT/.claude/.project_root\"; bash \"$ROOT/.claude/hooks/session-start.sh\"'"
+            "command": "HOOK_EVENT=session-start node --no-warnings=ExperimentalWarning \"$(git rev-parse --show-toplevel 2>/dev/null || echo .)/.claude/dist/hooks/bridge.js\""
           }
         ]
       }
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c '[ -f .claude/.project_root ] && ROOT=$(cat .claude/.project_root) || { ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; }; bash \"$ROOT/.claude/hooks/on-prompt.sh\"'"
+            "command": "HOOK_EVENT=prompt node --no-warnings=ExperimentalWarning \"$(cat .claude/.project_root 2>/dev/null || git rev-parse --show-toplevel 2>/dev/null || echo .)/.claude/dist/hooks/bridge.js\""
           }
         ]
       }
@@ -28,7 +28,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c '[ -f .claude/.project_root ] && ROOT=$(cat .claude/.project_root) || { ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; }; bash \"$ROOT/.claude/hooks/post-tool-edit.sh\"'"
+            "command": "HOOK_EVENT=post-edit node --no-warnings=ExperimentalWarning \"$(cat .claude/.project_root 2>/dev/null || git rev-parse --show-toplevel 2>/dev/null || echo .)/.claude/dist/hooks/bridge.js\""
           }
         ]
       },
@@ -37,7 +37,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c '[ -f .claude/.project_root ] && ROOT=$(cat .claude/.project_root) || { ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; }; bash \"$ROOT/.claude/hooks/post-tool-bash.sh\"'"
+            "command": "HOOK_EVENT=post-bash node --no-warnings=ExperimentalWarning \"$(cat .claude/.project_root 2>/dev/null || git rev-parse --show-toplevel 2>/dev/null || echo .)/.claude/dist/hooks/bridge.js\""
           }
         ]
       }
@@ -48,7 +48,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c '[ -f .claude/.project_root ] && ROOT=$(cat .claude/.project_root) || { ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; }; bash \"$ROOT/.claude/hooks/on-stop.sh\"'"
+            "command": "HOOK_EVENT=stop-session node --no-warnings=ExperimentalWarning \"$(cat .claude/.project_root 2>/dev/null || git rev-parse --show-toplevel 2>/dev/null || echo .)/.claude/dist/hooks/bridge.js\""
           }
         ]
       },
@@ -57,7 +57,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c '[ -f .claude/.project_root ] && ROOT=$(cat .claude/.project_root) || { ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; }; bash \"$ROOT/.claude/hooks/ralph-persist.sh\"'"
+            "command": "HOOK_EVENT=stop-ralph node --no-warnings=ExperimentalWarning \"$(cat .claude/.project_root 2>/dev/null || git rev-parse --show-toplevel 2>/dev/null || echo .)/.claude/dist/hooks/bridge.js\""
           }
         ]
       }

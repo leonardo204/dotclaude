@@ -1,6 +1,9 @@
 # OS
 .DS_Store
 
+# Node
+node_modules/
+
 # Claude Code runtime
 .claude/db/context.db
 .claude/.ctx_state
