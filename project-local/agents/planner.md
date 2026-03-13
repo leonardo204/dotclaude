@@ -1,7 +1,7 @@
 ---
 name: planner
 description: "요청 분석 → 태스크 분해 + 수용 기준 정의. TRIGGER: 복잡한 기능 구현 요청, 멀티스텝 작업"
-model: sonnet
+model: opus
 tools: Read, Glob, Grep, Bash
 color: blue
 ---

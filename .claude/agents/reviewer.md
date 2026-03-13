@@ -1,7 +1,7 @@
 ---
 name: reviewer
 description: "코드 리뷰 — 보안/정확성/품질 검토. TRIGGER: 구현+검증 완료 후 리뷰 단계"
-model: sonnet
+model: opus
 tools: Read, Glob, Grep, Bash
 color: yellow
 ---

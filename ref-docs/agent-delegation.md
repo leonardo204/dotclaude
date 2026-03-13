@@ -54,11 +54,11 @@ Agent B: helper.sh agent-context <key> → DB에서 조회
 
 | 에이전트 | 역할 | 모델 | 수정 권한 |
 |----------|------|:----:|:---------:|
-| planner | 요청 분석 → 태스크 분해 + 수용 기준 정의 | sonnet | ❌ |
-| architect | 설계/구현 검토 + 아키텍처 타당성 검증 | sonnet | ❌ |
+| planner | 요청 분석 → 태스크 분해 + 수용 기준 정의 | opus | ❌ |
+| architect | 설계/구현 검토 + 아키텍처 타당성 검증 | opus | ❌ |
 | ralph | 끈질긴 구현 — 완료+검증될 때까지 절대 중단 안 함 | sonnet | ✅ |
 | verifier | 빌드/테스트/타입체크 증거 기반 검증 | haiku | ❌ |
-| reviewer | 코드 리뷰 — 보안/정확성/품질 | sonnet | ❌ |
+| reviewer | 코드 리뷰 — 보안/정확성/품질 | opus | ❌ |
 | debugger | 버그/에러 근본 원인 진단 | sonnet | ❌ |
 | test-engineer | 테스트 전략 수립 + 테스트 코드 작성 | sonnet | ✅ |
 

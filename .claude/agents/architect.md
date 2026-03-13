@@ -1,7 +1,7 @@
 ---
 name: architect
 description: "설계/구현 검토 + 아키텍처 타당성 검증. TRIGGER: 설계 검토 필요, 아키텍처 변경"
-model: sonnet
+model: opus
 tools: Read, Glob, Grep, Bash
 color: blue
 ---
