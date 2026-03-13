@@ -41,6 +41,7 @@
 - **글로벌 파일 수정 시 `~/.claude/`에도 복사**: `global/CLAUDE.md` → `~/.claude/CLAUDE.md`, `global/commands/` → `~/.claude/commands/`, `global/scripts/` → `~/.claude/scripts/`
 - **Hook stdout 가시성 제약 준수**: `SessionStart`/`UserPromptSubmit`만 컨텍스트 주입 가능. `Stop`은 JSON 프로토콜(`{"decision":"block"}`)만 지원
 - **init/update 명령은 repo clone 방식**: 파일 내용을 기억해서 작성 금지, 반드시 `project-local/`에서 복사
+- **Mermaid 다이어그램 작성 시** → [컨벤션](ref-docs/conventions.md) 참조 (괄호 금지, 넘버링 규칙 등)
 
 ### 수정 체크리스트
 
