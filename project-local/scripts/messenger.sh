@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # messenger.sh — Telegram 메신저 알림 스크립트
 # 사용법: messenger.sh <subcommand> [args]
-# 서브커맨드: config, test, on, off, send, status, notify
+# 서브커맨드: config, test, on, off, send, status, notify, set, get
 
 set -euo pipefail
 
@@ -34,6 +34,9 @@ show_help() {
     echo "  messenger.sh send \"메시지\"                  메시지 전송"
     echo "  messenger.sh status                         현재 설정 상태 표시"
     echo "  messenger.sh notify                         세션 종료 알림 (Stop hook 전용)"
+    echo "  messenger.sh set min_duration <초>          최소 알림 시간 설정"
+    echo "  messenger.sh set scope <global|project>     알림 범위 설정"
+    echo "  messenger.sh get <key>                      설정값 조회"
     echo ""
     echo "설정 파일: ${CONFIG_FILE}"
     echo ""
@@ -41,6 +44,8 @@ show_help() {
     echo "  messenger.sh config 8714774691:AAE3eebo... 36737902"
     echo "  messenger.sh test"
     echo "  messenger.sh send \"빌드 완료!\""
+    echo "  messenger.sh set min_duration 300"
+    echo "  messenger.sh set scope project"
     echo ""
 }
 
@@ -52,6 +57,8 @@ read_config() {
     BOT_TOKEN=$(node -e "const c=require('${CONFIG_FILE}'); process.stdout.write(c.bot_token||'')" 2>/dev/null || true)
     CHAT_ID=$(node -e "const c=require('${CONFIG_FILE}'); process.stdout.write(String(c.chat_id||''))" 2>/dev/null || true)
     ENABLED=$(node -e "const c=require('${CONFIG_FILE}'); process.stdout.write(String(c.enabled===false?'false':'true'))" 2>/dev/null || echo "true")
+    MIN_DURATION=$(node -e "const c=require('${CONFIG_FILE}'); process.stdout.write(String(c.min_duration||0))" 2>/dev/null || echo "0")
+    SCOPE=$(node -e "const c=require('${CONFIG_FILE}'); process.stdout.write(c.scope||'global')" 2>/dev/null || echo "global")
     return 0
 }
 
@@ -60,13 +67,17 @@ write_config() {
     local token="$1"
     local chat="$2"
     local enabled="${3:-true}"
+    local min_duration="${4:-0}"
+    local scope="${5:-global}"
     mkdir -p "$(dirname "${CONFIG_FILE}")"
     node -e "
 const fs = require('fs');
 const config = {
   bot_token: '${token}',
   chat_id: '${chat}',
-  enabled: ${enabled}
+  enabled: ${enabled},
+  min_duration: ${min_duration},
+  scope: '${scope}'
 };
 fs.writeFileSync('${CONFIG_FILE}', JSON.stringify(config, null, 2) + '\n');
 "
@@ -118,13 +129,17 @@ cmd_config() {
     local token="$1"
     local chat="$2"
 
-    # 기존 설정의 enabled 값 유지
+    # 기존 설정의 enabled/min_duration/scope 값 유지
     local enabled="true"
+    local min_duration="0"
+    local scope="global"
     if read_config 2>/dev/null; then
         enabled="${ENABLED}"
+        min_duration="${MIN_DURATION}"
+        scope="${SCOPE}"
     fi
 
-    write_config "${token}" "${chat}" "${enabled}"
+    write_config "${token}" "${chat}" "${enabled}" "${min_duration}" "${scope}"
     ok "설정 저장 완료: ${CONFIG_FILE}"
     info "권한 설정: chmod 600 (소유자만 읽기/쓰기)"
     info "bot_token: ${token:0:10}..."
@@ -163,7 +178,7 @@ cmd_on() {
         error "먼저 설정하세요: messenger.sh config <bot_token> <chat_id>"
         exit 1
     fi
-    write_config "${BOT_TOKEN}" "${CHAT_ID}" "true"
+    write_config "${BOT_TOKEN}" "${CHAT_ID}" "true" "${MIN_DURATION}" "${SCOPE}"
     ok "알림 활성화됨"
 }
 
@@ -174,7 +189,7 @@ cmd_off() {
         error "먼저 설정하세요: messenger.sh config <bot_token> <chat_id>"
         exit 1
     fi
-    write_config "${BOT_TOKEN}" "${CHAT_ID}" "false"
+    write_config "${BOT_TOKEN}" "${CHAT_ID}" "false" "${MIN_DURATION}" "${SCOPE}"
     ok "알림 비활성화됨"
 }
 
@@ -212,6 +227,77 @@ cmd_send() {
     fi
 }
 
+# ─── 서브커맨드: set ───
+cmd_set() {
+    if [ $# -lt 2 ]; then
+        error "사용법: messenger.sh set <min_duration|scope> <값>"
+        exit 1
+    fi
+    local key="$1"
+    local value="$2"
+
+    if ! read_config 2>/dev/null; then
+        error "설정 파일이 없습니다."
+        error "먼저 설정하세요: messenger.sh config <bot_token> <chat_id>"
+        exit 1
+    fi
+
+    case "${key}" in
+        min_duration)
+            # 숫자인지 확인
+            if ! [[ "${value}" =~ ^[0-9]+$ ]]; then
+                error "min_duration 은 정수(초)여야 합니다. 예: messenger.sh set min_duration 300"
+                exit 1
+            fi
+            write_config "${BOT_TOKEN}" "${CHAT_ID}" "${ENABLED}" "${value}" "${SCOPE}"
+            local human
+            human=$(format_duration "${value}")
+            ok "최소 알림 시간 설정: ${value}초 (${human}) — 이 시간 미만 작업은 알림 스킵"
+            ;;
+        scope)
+            if [ "${value}" != "global" ] && [ "${value}" != "project" ]; then
+                error "scope 는 'global' 또는 'project' 이어야 합니다."
+                exit 1
+            fi
+            write_config "${BOT_TOKEN}" "${CHAT_ID}" "${ENABLED}" "${MIN_DURATION}" "${value}"
+            ok "알림 범위 설정: ${value}"
+            if [ "${value}" = "project" ]; then
+                info "프로젝트별 활성화: 해당 프로젝트에서 /dotclaude-messenger 실행 후 메뉴 4번 선택"
+            fi
+            ;;
+        *)
+            error "알 수 없는 설정 키: ${key} (사용 가능: min_duration, scope)"
+            exit 1
+            ;;
+    esac
+}
+
+# ─── 서브커맨드: get ───
+cmd_get() {
+    if [ $# -lt 1 ]; then
+        error "사용법: messenger.sh get <key>"
+        exit 1
+    fi
+    local key="$1"
+
+    if ! read_config 2>/dev/null; then
+        echo ""
+        return 0
+    fi
+
+    case "${key}" in
+        bot_token)    printf '%s\n' "${BOT_TOKEN}" ;;
+        chat_id)      printf '%s\n' "${CHAT_ID}" ;;
+        enabled)      printf '%s\n' "${ENABLED}" ;;
+        min_duration) printf '%s\n' "${MIN_DURATION}" ;;
+        scope)        printf '%s\n' "${SCOPE}" ;;
+        *)
+            error "알 수 없는 키: ${key} (사용 가능: bot_token, chat_id, enabled, min_duration, scope)"
+            exit 1
+            ;;
+    esac
+}
+
 # ─── DB 경로 탐색 ───
 find_db() {
     local proj_root
@@ -240,6 +326,20 @@ format_duration() {
     else
         echo "1초 미만"
     fi
+}
+
+# ─── scope 체크: project 모드일 때 현재 디렉토리에 .messenger_enabled 파일 존재 확인 ───
+check_scope() {
+    local scope="${1:-global}"
+    if [ "${scope}" = "project" ]; then
+        # CWD 기준으로 .claude/.messenger_enabled 파일 확인
+        local proj_root
+        proj_root=$(cat .claude/.project_root 2>/dev/null || git rev-parse --show-toplevel 2>/dev/null || echo ".")
+        if [ ! -f "${proj_root}/.claude/.messenger_enabled" ]; then
+            return 1
+        fi
+    fi
+    return 0
 }
 
 # ─── 서브커맨드: notify (Stop hook 전용) ───
@@ -309,9 +409,9 @@ cmd_notify() {
         # 시작 시각 (사람이 읽을 수 있는 형태)
         if [ "${start_epoch}" -gt 0 ] 2>/dev/null; then
             start_time_str=$(date -r "${start_epoch}" "+%H:%M:%S" 2>/dev/null || echo "")
-            local now_epoch
-            now_epoch=$(date +%s 2>/dev/null || echo "0")
-            elapsed_sec=$((now_epoch - start_epoch))
+            local now_ts
+            now_ts=$(date +%s 2>/dev/null || echo "0")
+            elapsed_sec=$((now_ts - start_epoch))
         fi
 
         # 편집 파일 수: prompt 이후 tool_usage에서 Edit/Write 고유 파일 카운트
@@ -363,6 +463,19 @@ cmd_notify() {
         fi
     fi
 
+    # min_duration 체크: elapsed_sec < min_duration 이면 알림 스킵
+    local min_dur="${MIN_DURATION:-0}"
+    if [ "${min_dur}" -gt 0 ] 2>/dev/null && [ "${elapsed_sec}" -gt 0 ] 2>/dev/null; then
+        if [ "${elapsed_sec}" -lt "${min_dur}" ]; then
+            exit 0
+        fi
+    fi
+
+    # scope 체크: project 모드이면 현재 프로젝트에 .messenger_enabled 파일 필요
+    if ! check_scope "${SCOPE:-global}" 2>/dev/null; then
+        exit 0
+    fi
+
     # 시간 포맷
     local duration_str
     duration_str=$(format_duration "${elapsed_sec}")
@@ -406,15 +519,24 @@ cmd_status() {
         masked_token="${BOT_TOKEN:0:10}...(마스킹됨)"
     fi
 
-    printf "  %-12s %s\n" "bot_token:" "${masked_token}"
-    printf "  %-12s %s\n" "chat_id:" "${CHAT_ID:-'(비어있음)'}"
-    printf "  %-12s " "enabled:"
+    printf "  %-14s %s\n" "bot_token:" "${masked_token}"
+    printf "  %-14s %s\n" "chat_id:" "${CHAT_ID:-'(비어있음)'}"
+    printf "  %-14s " "enabled:"
     if [ "${ENABLED}" = "true" ]; then
         printf "${GREEN}활성화${RESET}\n"
     else
         printf "${YELLOW}비활성화${RESET}\n"
     fi
-    printf "  %-12s %s\n" "설정 파일:" "${CONFIG_FILE}"
+    local min_dur="${MIN_DURATION:-0}"
+    if [ "${min_dur}" -gt 0 ] 2>/dev/null; then
+        local human
+        human=$(format_duration "${min_dur}")
+        printf "  %-14s %s초 (%s)\n" "min_duration:" "${min_dur}" "${human}"
+    else
+        printf "  %-14s %s\n" "min_duration:" "제한 없음"
+    fi
+    printf "  %-14s %s\n" "scope:" "${SCOPE:-global}"
+    printf "  %-14s %s\n" "설정 파일:" "${CONFIG_FILE}"
     echo ""
 }
 
@@ -444,6 +566,14 @@ case "${SUBCOMMAND}" in
         ;;
     notify)
         cmd_notify
+        ;;
+    set)
+        shift
+        cmd_set "$@"
+        ;;
+    get)
+        shift
+        cmd_get "$@"
         ;;
     prompt-time)
         # UserPromptSubmit hook에서 호출 — DB에 시작 epoch 저장
