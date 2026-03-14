@@ -38,6 +38,15 @@
             "command": "bash ~/.claude/scripts/messenger.sh prompt-time 2>/dev/null &"
           }
         ]
+      },
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node --no-warnings=ExperimentalWarning ~/.claude/dist/hud/fetcher.js &"
+          }
+        ]
       }
     ],
     "PostToolUse": [

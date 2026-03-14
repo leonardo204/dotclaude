@@ -8,7 +8,7 @@
  * 2. OAuth 토큰 획득
  * 3. usage API 호출 → ~/.claude/.hud_cache에 저장
  * 4. 15분마다 반복
- * 5. 2시간 후 자동 종료
+ * 5. 24시간 후 자동 종료
  */
 
 import { existsSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
@@ -20,7 +20,7 @@ import { getOAuthToken } from "../shared/oauth.js";
 const HUD_CACHE_FILE = join(homedir(), ".claude", ".hud_cache");
 const PID_FILE = join(homedir(), ".claude", ".hud_fetcher.pid");
 const FETCH_INTERVAL_MS = 15 * 60 * 1000; // 15분
-const MAX_LIFETIME_MS = 2 * 60 * 60 * 1000; // 2시간
+const MAX_LIFETIME_MS = 24 * 60 * 60 * 1000; // 24시간
 const USAGE_API_URL = "https://api.anthropic.com/api/oauth/usage";
 
 // ── 캐시 파일 형식 ──

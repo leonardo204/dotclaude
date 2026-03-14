@@ -114,7 +114,7 @@ async function getOAuthToken() {
 var HUD_CACHE_FILE = join2(homedir2(), ".claude", ".hud_cache");
 var PID_FILE = join2(homedir2(), ".claude", ".hud_fetcher.pid");
 var FETCH_INTERVAL_MS = 15 * 60 * 1e3;
-var MAX_LIFETIME_MS = 2 * 60 * 60 * 1e3;
+var MAX_LIFETIME_MS = 24 * 60 * 60 * 1e3;
 var USAGE_API_URL = "https://api.anthropic.com/api/oauth/usage";
 function writePid() {
   try {
