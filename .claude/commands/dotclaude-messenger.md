@@ -1,6 +1,6 @@
 ---
 description: "Telegram 메신저 알림 설정/테스트/토글 — 대화형 가이드 포함"
-allowed-tools: [Bash]
+allowed-tools: [Bash, AskUserQuestion]
 ---
 
 Telegram 메신저 알림 명령
@@ -8,27 +8,12 @@ Telegram 메신저 알림 명령
 ## 인자 처리
 
 - `$ARGUMENTS`를 확인한다
-- `config <bot_token> <chat_id>` → 봇 토큰과 채팅 ID 설정
-- `test` → 테스트 메시지 전송
-- `on` → 알림 활성화
-- `off` → 알림 비활성화
-- `send "메시지"` → 메시지 전송
-- `status` → 현재 설정 상태 표시
-- `notify` → 세션 종료 알림 전송 (Stop hook 전용, 직접 호출도 가능)
-- `set min_duration <초>` → 최소 알림 시간 설정
-- `set scope <global|project>` → 알림 범위 설정
-- `get <key>` → 설정값 조회
-- 인자 없음 → 대화형 가이드 실행
-
-## 실행
-
-인자가 있으면 즉시 실행하고 결과를 보고한다.
-인자가 없으면 아래 대화형 가이드를 진행한다.
+- 인자가 있으면 → bash로 즉시 실행하고 종료
+- 인자 없음 → 대화형 가이드 (AskUserQuestion 사용)
 
 ```bash
 ARGS="$ARGUMENTS"
 SCRIPT=".claude/scripts/messenger.sh"
-CONFIG_FILE="${HOME}/.claude/messenger.json"
 
 if [ -n "$ARGS" ]; then
   bash "$SCRIPT" $ARGS
@@ -36,19 +21,14 @@ if [ -n "$ARGS" ]; then
 fi
 ```
 
-인자가 없으면 아래 순서로 대화형 가이드를 진행한다. **bash 코드 블록으로 실행하지 말고 Claude가 직접 대화를 이끈다.**
+인자가 없으면 아래 대화형 가이드를 진행한다.
 
-## 대화형 가이드 (인자 없음)
+## 대화형 가이드
 
-### 단계 1: 봇 설정 상태 확인
-
-먼저 현재 설정 상태를 확인한다.
+### 단계 1: 설정 상태 확인
 
 ```bash
 CONFIG_FILE="${HOME}/.claude/messenger.json"
-SCRIPT=".claude/scripts/messenger.sh"
-
-# 설정 상태 판단
 if [ ! -f "${CONFIG_FILE}" ]; then
   echo "NO_CONFIG"
 elif ! BOT_TOKEN=$(node -e "const c=require('${CONFIG_FILE}'); process.stdout.write(c.bot_token||'')" 2>/dev/null) || [ -z "${BOT_TOKEN}" ]; then
@@ -57,124 +37,106 @@ else
   ENABLED=$(node -e "const c=require('${CONFIG_FILE}'); process.stdout.write(String(c.enabled===false?'false':'true'))" 2>/dev/null || echo "true")
   MIN_DUR=$(node -e "const c=require('${CONFIG_FILE}'); process.stdout.write(String(c.min_duration||0))" 2>/dev/null || echo "0")
   SCOPE=$(node -e "const c=require('${CONFIG_FILE}'); process.stdout.write(c.scope||'global')" 2>/dev/null || echo "global")
-
-  # 활성화 상태 표시
-  if [ "${ENABLED}" = "true" ]; then
-    STATUS_STR="활성화"
-  else
-    STATUS_STR="비활성화"
-  fi
-
-  # 최소 알림 시간 표시
-  if [ "${MIN_DUR}" -gt 0 ] 2>/dev/null; then
-    if [ "${MIN_DUR}" -ge 3600 ] 2>/dev/null; then
-      MIN_STR="$((MIN_DUR/3600))시간"
-    elif [ "${MIN_DUR}" -ge 60 ] 2>/dev/null; then
-      MIN_STR="$((MIN_DUR/60))분"
-    else
-      MIN_STR="${MIN_DUR}초"
-    fi
-  else
-    MIN_STR="제한 없음"
-  fi
-
-  echo "CONFIGURED:${STATUS_STR}:${MIN_STR}:${SCOPE}"
+  echo "CONFIGURED:${ENABLED}:${MIN_DUR}:${SCOPE}"
 fi
 ```
 
-### 단계 2: 결과에 따라 분기
+### 단계 2: 분기
 
-위 확인 결과가 `NO_CONFIG` 또는 `NO_TOKEN` 이면 **봇 미설정 플로우**를 진행하고,
-`CONFIGURED:...` 이면 **설정 완료 메뉴**를 표시한다.
+결과가 `NO_CONFIG` 또는 `NO_TOKEN` → **봇 미설정 플로우**
+결과가 `CONFIGURED:...` → **설정 완료 메뉴**
 
 ---
 
 ## 봇 미설정 플로우
 
-상태가 `NO_CONFIG` 또는 `NO_TOKEN` 이면 아래 순서로 안내한다.
+### Step A: 초기 안내
 
-Claude가 직접 다음 내용을 사용자에게 출력하고 단계별로 진행한다:
+먼저 아래 안내를 텍스트로 출력한다:
 
----
+```
+Telegram 봇이 아직 설정되지 않았습니다.
 
-**Telegram Bot 설정 안내**
-
-Telegram 봇이 아직 설정되지 않았습니다. 아래 단계로 설정합니다.
-
-**1단계: BotFather에서 봇 생성**
-1. Telegram에서 @BotFather 를 검색하여 대화를 시작합니다
-2. `/newbot` 명령을 입력합니다
-3. 봇 이름을 입력합니다 (예: My Claude Bot)
-4. 봇 사용자명을 입력합니다 (예: my_claude_bot — 반드시 `_bot` 으로 끝나야 합니다)
-5. BotFather가 Bot Token을 제공합니다 (예: `1234567890:AAE3eebo...`)
-
-**2단계: Chat ID 확인**
-1. 방금 만든 봇에게 아무 메시지나 보냅니다 (예: "hello")
-2. 브라우저에서 `https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates` 접속
-3. 결과에서 `"chat":{"id":숫자}` 부분의 숫자가 Chat ID입니다
-
----
-
-이 안내를 출력한 후 사용자에게 묻는다:
-
-"Bot Token을 입력해주세요 (BotFather에서 받은 토큰):"
-
-사용자가 토큰을 입력하면, 이어서 묻는다:
-
-"Chat ID를 입력해주세요 (getUpdates에서 확인한 숫자):"
-
-Chat ID까지 입력받으면 아래 bash를 실행한다:
-
-```bash
-SCRIPT=".claude/scripts/messenger.sh"
-# 사용자가 입력한 TOKEN과 CHAT_ID로 설정
-bash "$SCRIPT" config "<입력된_TOKEN>" "<입력된_CHAT_ID>"
+1단계: Telegram에서 @BotFather 검색 → /newbot → 봇 생성 → Bot Token 복사
+2단계: 봇에게 아무 메시지 전송 → https://api.telegram.org/bot<TOKEN>/getUpdates 접속 → chat.id 확인
 ```
 
-설정 완료 후 테스트를 실행한다:
+### Step B: AskUserQuestion으로 토큰 입력 요청
+
+AskUserQuestion 호출:
+- question: "Bot Token을 입력해주세요 (BotFather에서 받은 토큰)"
+- header: "Bot Token"
+- options:
+  - label: "설정 건너뛰기", description: "나중에 /dotclaude-messenger config <token> <chat_id>로 설정"
+  - label: "설정 방법 다시 보기", description: "BotFather 설정 절차를 다시 안내"
+
+사용자가 "Other"로 토큰을 직접 입력하면 다음 단계로 진행.
+"설정 건너뛰기" 선택 시 즉시 종료.
+
+### Step C: AskUserQuestion으로 Chat ID 입력 요청
+
+AskUserQuestion 호출:
+- question: "Chat ID를 입력해주세요 (getUpdates에서 확인한 숫자)"
+- header: "Chat ID"
+- options:
+  - label: "설정 건너뛰기", description: "나중에 설정"
+  - label: "Chat ID 확인 방법", description: "getUpdates API로 확인하는 방법 안내"
+
+사용자가 "Other"로 Chat ID를 직접 입력하면 config 실행.
+
+### Step D: config + test 실행
 
 ```bash
-SCRIPT=".claude/scripts/messenger.sh"
-bash "$SCRIPT" test
+bash .claude/scripts/messenger.sh config "<TOKEN>" "<CHAT_ID>"
+bash .claude/scripts/messenger.sh test
 ```
 
-테스트 성공 시 다음을 안내한다:
-- 알림은 Claude Code 세션이 종료될 때 자동으로 전송됩니다
-- 최소 알림 시간 설정: `/dotclaude-messenger set min_duration 300` (5분 미만 작업 스킵)
-- 알림 범위 설정: `/dotclaude-messenger set scope project` (특정 프로젝트만 알림)
+테스트 성공 시 → 설정 완료 메뉴로 이동하여 추가 설정 제안.
+테스트 실패 시 → 토큰/ID 재입력 안내.
 
 ---
 
 ## 설정 완료 메뉴
 
-상태가 `CONFIGURED:STATUS:MIN:SCOPE` 이면 아래 메뉴를 표시한다.
+`CONFIGURED:ENABLED:MIN_DUR:SCOPE` 값을 파싱하여 현재 상태를 텍스트로 한 줄 표시한 후, AskUserQuestion으로 메뉴를 제공한다.
 
-`CONFIGURED:활성화:5분:global` 형태의 값을 파싱하여 현재 상태를 표시한 후, 아래 메뉴를 출력한다:
-
+**현재 상태 표시 예시:**
 ```
-## dotclaude-messenger 설정
-
-현재 상태: <STATUS> | 최소 알림 시간: <MIN> | 범위: <SCOPE>
-
-1. 테스트 메시지 전송
-2. 알림 on/off 토글
-3. 최소 알림 시간 설정 (N분/시간 이상 작업만 알림)
-4. 알림 범위 설정 (글로벌 / 현재 프로젝트만)
-5. 봇 설정 변경 (Token / Chat ID)
-6. 수동 메시지 전송
-
-선택하세요 (1-6, 종료: q):
+현재: 활성화 | 최소 10분 | 글로벌
 ```
 
-사용자 선택에 따라 아래를 실행한다:
+### 메인 메뉴: AskUserQuestion
 
-**1번 — 테스트 메시지 전송:**
+AskUserQuestion 호출:
+- question: "무엇을 하시겠습니까?"
+- header: "Messenger"
+- options:
+  - label: "테스트 전송", description: "Telegram으로 테스트 메시지를 보냅니다"
+  - label: "알림 설정", description: "on/off, 최소 시간, 범위 등 알림 조건 변경"
+  - label: "봇 변경", description: "Bot Token / Chat ID 재설정"
+  - label: "메시지 전송", description: "원하는 메시지를 직접 Telegram으로 전송"
+
+사용자가 "Other"로 입력하면 해당 내용을 해석하여 처리한다 (예: "skip", "종료" → 가이드 종료).
+
+### 테스트 전송 선택 시
+
 ```bash
 bash .claude/scripts/messenger.sh test
 ```
 
-**2번 — 알림 on/off 토글:**
-현재 상태를 확인하여 반대로 전환한다.
+### 알림 설정 선택 시
+
+AskUserQuestion으로 세부 설정 메뉴 제공:
+- question: "어떤 설정을 변경하시겠습니까?"
+- header: "알림 설정"
+- options:
+  - label: "on/off 토글", description: "현재 {ENABLED 상태}. 반대로 전환합니다"
+  - label: "최소 알림 시간", description: "현재 {MIN_DUR}. N분 이상 작업만 알림"
+  - label: "알림 범위", description: "현재 {SCOPE}. 글로벌 또는 프로젝트별 선택"
+  - label: "건너뛰기", description: "메인 메뉴로 돌아갑니다"
+
+#### on/off 토글 선택 시
+
 ```bash
 # ENABLED가 true이면:
 bash .claude/scripts/messenger.sh off
@@ -182,36 +144,73 @@ bash .claude/scripts/messenger.sh off
 bash .claude/scripts/messenger.sh on
 ```
 
-**3번 — 최소 알림 시간 설정:**
-사용자에게 "몇 분 이상 작업에만 알림을 받겠습니까? (0 = 제한 없음):" 을 물은 후,
-입력값을 초로 변환하여 설정한다.
+#### 최소 알림 시간 선택 시
+
+AskUserQuestion 호출:
+- question: "몇 분 이상 작업에만 알림을 받겠습니까?"
+- header: "최소 시간"
+- options:
+  - label: "제한 없음", description: "모든 작업에 알림 (0초)"
+  - label: "5분", description: "5분 미만 작업은 알림 스킵 (300초)"
+  - label: "10분 (추천)", description: "10분 미만 작업은 알림 스킵 (600초)"
+  - label: "30분", description: "30분 미만 작업은 알림 스킵 (1800초)"
+
+"Other"로 직접 분 단위 입력 가능. 입력값을 초로 변환하여 실행:
 ```bash
-# 입력이 5이면 300초
 bash .claude/scripts/messenger.sh set min_duration <초>
 ```
 
-**4번 — 알림 범위 설정:**
-다음 선택지를 제시한다:
-- `global`: 모든 프로젝트에서 알림 (기본값)
-- `project`: `.claude/.messenger_enabled` 파일이 있는 프로젝트만 알림
+#### 알림 범위 선택 시
 
-사용자가 `project`를 선택하면 scope를 변경하고, 현재 프로젝트에 활성화 파일을 생성할지 묻는다.
+AskUserQuestion 호출:
+- question: "알림 범위를 설정하세요"
+- header: "범위"
+- options:
+  - label: "글로벌 (추천)", description: "모든 프로젝트에서 알림"
+  - label: "프로젝트별", description: ".claude/.messenger_enabled 파일이 있는 프로젝트만 알림"
+
 ```bash
 bash .claude/scripts/messenger.sh set scope <global|project>
-# project 선택 + 현재 프로젝트 활성화 시:
+```
+
+project 선택 시 추가 AskUserQuestion:
+- question: "현재 프로젝트에서 알림을 활성화할까요?"
+- header: "프로젝트"
+- options:
+  - label: "활성화", description: "이 프로젝트에 .claude/.messenger_enabled 생성"
+  - label: "건너뛰기", description: "나중에 수동으로 설정"
+
+활성화 선택 시:
+```bash
 touch .claude/.messenger_enabled
 ```
 
-**5번 — 봇 설정 변경:**
-Bot Token과 Chat ID를 다시 입력받아 config 실행.
-```bash
-bash .claude/scripts/messenger.sh config "<새_TOKEN>" "<새_CHAT_ID>"
-```
+### 봇 변경 선택 시
 
-**6번 — 수동 메시지 전송:**
-"전송할 메시지를 입력하세요:" 를 물은 후:
+봇 미설정 플로우의 Step B부터 동일하게 진행한다.
+
+### 메시지 전송 선택 시
+
+AskUserQuestion 호출:
+- question: "전송할 메시지를 입력하세요"
+- header: "메시지"
+- options:
+  - label: "건너뛰기", description: "메시지 전송을 취소합니다"
+  - label: "현재 상태 전송", description: "현재 설정 상태를 Telegram으로 전송"
+
+"Other"로 직접 메시지 입력:
 ```bash
 bash .claude/scripts/messenger.sh send "<입력된_메시지>"
 ```
 
-각 기능 완료 후 "메뉴로 돌아가겠습니까? (y/n):" 를 묻고, y이면 메뉴를 다시 표시한다.
+### 메뉴 반복
+
+각 작업 완료 후 AskUserQuestion 호출:
+- question: "계속 설정하시겠습니까?"
+- header: "계속"
+- options:
+  - label: "메뉴로 돌아가기", description: "메인 메뉴를 다시 표시합니다"
+  - label: "종료", description: "설정을 마칩니다"
+
+"메뉴로 돌아가기" → 메인 메뉴 AskUserQuestion 다시 실행
+"종료" 또는 "Other"에 "skip"/"종료"/"q" → 가이드 종료
