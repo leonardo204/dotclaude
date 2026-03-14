@@ -54,6 +54,7 @@
 | `global/scripts/context-monitor.mjs` | → `~/.claude/scripts/` + `project-local/scripts/` |
 | `project-local/hooks/*.sh` | 이 프로젝트 `.claude/hooks/`에도 반영 |
 | `project-local/scripts/context-monitor.mjs` | → `global/scripts/` + `~/.claude/scripts/` |
+| `project-local/scripts/messenger.sh` | → `global/scripts/` + `.claude/scripts/` + `~/.claude/scripts/` |
 | `install.sh` | `global/` 디렉토리 구조와 복사 대상 일치 확인 |
 | `uninstall.sh` | 삭제 대상 파일 목록이 `install.sh`가 설치하는 파일과 일치 확인 |
 | `CLAUDE.md` (any) | → `README.md` 관련 섹션 업데이트 |

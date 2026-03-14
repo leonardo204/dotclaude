@@ -17,6 +17,7 @@ dotclaude 시스템 도움말을 출력합니다.
 | `/project:dotclaude-discover` | Context DB 패턴 분석 → 자동화 가능한 패턴 발견 |
 | `/project:dotclaude-reportdb` | Context DB 전체 현황 리포트 |
 | `/project:dotclaude-statusline` | StatusLine HUD on/off 토글 |
+| `/project:dotclaude-messenger` | Telegram 메신저 알림 설정/테스트/토글 |
 
 ## dotclaude 글로벌 명령어
 

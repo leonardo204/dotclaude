@@ -84,7 +84,7 @@ for f in .claude/agents/*.md; do
 done
 
 # 시스템 command 이름 목록
-SYS_CMDS="implement commit tellme discover reportdb"
+SYS_CMDS="implement commit tellme discover reportdb messenger"
 for f in .claude/commands/*.md; do
     name=$(basename "$f" .md)
     if ! echo "$SYS_CMDS" | grep -qw "$name"; then

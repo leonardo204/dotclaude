@@ -20,6 +20,15 @@
             "command": "HOOK_EVENT=prompt node --no-warnings=ExperimentalWarning \"$(cat .claude/.project_root 2>/dev/null || git rev-parse --show-toplevel 2>/dev/null || echo .)/.claude/dist/hooks/bridge.js\""
           }
         ]
+      },
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/scripts/messenger.sh prompt-time 2>/dev/null &"
+          }
+        ]
       }
     ],
     "PostToolUse": [
@@ -58,6 +67,15 @@
           {
             "type": "command",
             "command": "HOOK_EVENT=stop-ralph node --no-warnings=ExperimentalWarning \"$(cat .claude/.project_root 2>/dev/null || git rev-parse --show-toplevel 2>/dev/null || echo .)/.claude/dist/hooks/bridge.js\""
+          }
+        ]
+      },
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/scripts/messenger.sh notify 2>/dev/null &"
           }
         ]
       }

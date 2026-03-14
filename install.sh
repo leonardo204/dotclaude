@@ -196,7 +196,20 @@ mkdir -p "${DOTCLAUDE_DIR}"
 cp -r "${TMPDIR_CLONE}/global/"* "${DOTCLAUDE_DIR}/"
 ok "Global files installed."
 
-# ─── Step 4a: Install dist/ files from project-local ───
+# ─── Step 4a: Install scripts/ from global ───
+info "Installing scripts/ files..."
+mkdir -p "${DOTCLAUDE_DIR}/scripts"
+if [ -f "${TMPDIR_CLONE}/global/scripts/context-monitor.mjs" ]; then
+    cp "${TMPDIR_CLONE}/global/scripts/context-monitor.mjs" "${DOTCLAUDE_DIR}/scripts/"
+    ok "context-monitor.mjs installed."
+fi
+if [ -f "${TMPDIR_CLONE}/global/scripts/messenger.sh" ]; then
+    cp "${TMPDIR_CLONE}/global/scripts/messenger.sh" "${DOTCLAUDE_DIR}/scripts/"
+    chmod +x "${DOTCLAUDE_DIR}/scripts/messenger.sh"
+    ok "messenger.sh installed."
+fi
+
+# ─── Step 4b: Install dist/ files from project-local ───
 info "Installing dist/ bridge and HUD files..."
 if [ ! -d "${TMPDIR_CLONE}/project-local/dist" ]; then
   error "dist/ not found in repo. Build required before release."
@@ -206,7 +219,7 @@ mkdir -p "${DOTCLAUDE_DIR}/dist/hooks" "${DOTCLAUDE_DIR}/dist/hud" "${DOTCLAUDE_
 cp -r "${TMPDIR_CLONE}/project-local/dist/"* "${DOTCLAUDE_DIR}/dist/"
 ok "dist/ files installed."
 
-# ─── Step 4b: HUD scope selection ───
+# ─── Step 4c: HUD scope selection ───
 echo ""
 printf "${BOLD}StatusLine HUD 설치 범위를 선택하세요:${RESET}\n"
 echo "  1) Global  — 모든 프로젝트에서 HUD 표시 (기본)"

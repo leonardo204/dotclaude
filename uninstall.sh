@@ -59,6 +59,8 @@ if [ "${FORCE}" = false ]; then
     echo "  ~/.claude/commands/dotclaude-init.md"
     echo "  ~/.claude/commands/dotclaude-update.md"
     echo "  ~/.claude/scripts/context-monitor.mjs  (legacy)"
+    echo "  ~/.claude/scripts/messenger.sh"
+    echo "  ~/.claude/messenger.json  (Telegram 설정)"
     echo "  ~/.claude/dist/  (bridge, HUD, MCP)"
     echo ""
     echo "Any other files in ~/.claude/ will be preserved."
@@ -83,6 +85,8 @@ DOTCLAUDE_FILES=(
     "${DOTCLAUDE_DIR}/commands/dotclaude-init.md"
     "${DOTCLAUDE_DIR}/commands/dotclaude-update.md"
     "${DOTCLAUDE_DIR}/scripts/context-monitor.mjs"
+    "${DOTCLAUDE_DIR}/scripts/messenger.sh"
+    "${DOTCLAUDE_DIR}/messenger.json"
     "${DOTCLAUDE_DIR}/.hud_disabled"
 )
 
