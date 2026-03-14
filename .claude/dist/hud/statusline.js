@@ -98,7 +98,7 @@ function formatDuration(ms) {
 function renderLimit(label, info) {
   if (!info || info.utilization == null) return null;
   const raw = info.utilization;
-  const pct = Math.round(raw > 1 ? raw : raw * 100);
+  const pct = Math.round(raw >= 1 ? raw : raw * 100);
   const resetStr = info.resets_at ? formatDuration(new Date(info.resets_at).getTime() - Date.now()) : null;
   const color = pct >= 90 ? C.red : pct >= 70 ? C.yellow : C.green;
   const resetPart = resetStr ? `${C.dim}(${resetStr})${C.reset}` : "";

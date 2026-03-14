@@ -306,7 +306,7 @@ function renderLimit(label, info) {
 
   // API returns utilization as 0-100 (e.g. 38.0 = 38%)
   const raw = info.utilization;
-  const pct = Math.round(raw > 1 ? raw : raw * 100);
+  const pct = Math.round(raw >= 1 ? raw : raw * 100);
   const resetStr = info.resets_at
     ? formatDuration(new Date(info.resets_at).getTime() - Date.now())
     : null;
