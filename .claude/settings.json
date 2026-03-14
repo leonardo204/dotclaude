@@ -9,6 +9,15 @@
             "command": "HOOK_EVENT=session-start node --no-warnings=ExperimentalWarning \"$(git rev-parse --show-toplevel 2>/dev/null || echo .)/.claude/dist/hooks/bridge.js\""
           }
         ]
+      },
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node --no-warnings=ExperimentalWarning ~/.claude/dist/hud/fetcher.js &"
+          }
+        ]
       }
     ],
     "UserPromptSubmit": [
