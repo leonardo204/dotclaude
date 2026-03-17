@@ -55,6 +55,7 @@
 - Hooks: 5개 자동 실행 스크립트 → ref-docs/hooks.md
 - 컨벤션: 커밋, 주석, 로깅 → ref-docs/conventions.md
 - 셋업: 새 환경 설정 → ref-docs/setup.md
+- Messenger: Telegram 알림 → `~/.claude/scripts/messenger.sh`, `/dotclaude-messenger`
 
 ---
 

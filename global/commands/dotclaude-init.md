@@ -85,7 +85,7 @@ for f in .claude/agents/*.md; do
     fi
 done
 
-SYS_CMDS="implement commit tellme discover reportdb messenger"
+SYS_CMDS="dotclaude-implement dotclaude-commit dotclaude-tellme dotclaude-discover dotclaude-reportdb dotclaude-messenger dotclaude-help dotclaude-statusline"
 for f in .claude/commands/*.md; do
     name=$(basename "$f" .md)
     if ! echo "$SYS_CMDS" | grep -qw "$name"; then
@@ -135,7 +135,7 @@ cat "$SRC/settings.json"
 ### 2단계: 디렉토리 구조 생성
 
 ```bash
-mkdir -p .claude/agents .claude/db .claude/dist/hooks .claude/dist/hud .claude/dist/mcp .claude/commands
+mkdir -p .claude/agents .claude/db .claude/dist/hooks .claude/dist/hud .claude/dist/mcp .claude/commands .claude/scripts
 ```
 
 ### 3단계: 파일 복사 (project-local → .claude/)
@@ -155,8 +155,13 @@ cp -r "$SRC"/dist/hooks/* .claude/dist/hooks/
 cp -r "$SRC"/dist/hud/* .claude/dist/hud/
 cp -r "$SRC"/dist/mcp/* .claude/dist/mcp/
 
-# Commands (5개)
+# Commands (8개)
 cp "$SRC"/commands/*.md .claude/commands/
+
+# Scripts — messenger 등
+cp "$SRC"/scripts/*.sh .claude/scripts/
+cp "$SRC"/scripts/*.mjs .claude/scripts/ 2>/dev/null || true
+chmod +x .claude/scripts/*.sh 2>/dev/null || true
 
 # settings.json
 cp "$SRC"/settings.json .claude/settings.json
@@ -322,6 +327,7 @@ grep -q '.ralph_state' .gitignore 2>/dev/null || echo '.claude/.ralph_state' >> 
 grep -q '.hud_cache' .gitignore 2>/dev/null || echo '.claude/.hud_cache' >> .gitignore
 grep -q '.hook_feedback' .gitignore 2>/dev/null || echo '.claude/.hook_feedback' >> .gitignore
 grep -q '.project_root' .gitignore 2>/dev/null || echo '.claude/.project_root' >> .gitignore
+grep -q '.messenger_enabled' .gitignore 2>/dev/null || echo '.claude/.messenger_enabled' >> .gitignore
 ```
 
 ### 9단계: 정리
@@ -343,7 +349,8 @@ rm -rf "$DOTCLAUDE_TMP"
 - .claude/dist/hooks/bridge.js (Hook 브릿지)
 - .claude/dist/hud/ (HUD statusline)
 - .claude/dist/mcp/server.js (MCP 서버)
-- .claude/commands/ (5개 커스텀 명령어)
+- .claude/scripts/ (messenger.sh, context-monitor.mjs)
+- .claude/commands/ (8개 커스텀 명령어)
 - .claude/settings.json (Hook 등록 + HUD)
 - .mcp.json (MCP 서버 자동 시작 설정)
 - {DOC_ROOT}/claude/ (ref-docs 4개 — context-db, context-monitor, conventions, setup)

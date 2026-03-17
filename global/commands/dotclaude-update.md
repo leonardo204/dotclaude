@@ -84,7 +84,7 @@ for f in .claude/agents/*.md; do
 done
 
 # 시스템 command 이름 목록
-SYS_CMDS="implement commit tellme discover reportdb messenger"
+SYS_CMDS="dotclaude-implement dotclaude-commit dotclaude-tellme dotclaude-discover dotclaude-reportdb dotclaude-messenger dotclaude-help dotclaude-statusline"
 for f in .claude/commands/*.md; do
     name=$(basename "$f" .md)
     if ! echo "$SYS_CMDS" | grep -qw "$name"; then
@@ -180,6 +180,12 @@ cp -r "$SRC"/dist/mcp/* .claude/dist/mcp/
 
 # Commands — 클린 교체
 cp "$SRC"/commands/*.md .claude/commands/
+
+# Scripts — messenger 등
+mkdir -p .claude/scripts
+cp "$SRC"/scripts/*.sh .claude/scripts/
+cp "$SRC"/scripts/*.mjs .claude/scripts/ 2>/dev/null || true
+chmod +x .claude/scripts/*.sh 2>/dev/null || true
 
 # .mcp.json — MCP 서버 자동 시작 설정 (클린 교체)
 cp "$SRC"/.mcp.json .mcp.json
@@ -331,6 +337,7 @@ grep -q '.ralph_state' .gitignore 2>/dev/null || echo '.claude/.ralph_state' >> 
 grep -q '.hud_cache' .gitignore 2>/dev/null || echo '.claude/.hud_cache' >> .gitignore
 grep -q '.hook_feedback' .gitignore 2>/dev/null || echo '.claude/.hook_feedback' >> .gitignore
 grep -q '.project_root' .gitignore 2>/dev/null || echo '.claude/.project_root' >> .gitignore
+grep -q '.messenger_enabled' .gitignore 2>/dev/null || echo '.claude/.messenger_enabled' >> .gitignore
 ```
 
 ### 10단계: 정리
@@ -351,7 +358,8 @@ rm -rf "$DOTCLAUDE_TMP"
 - .claude/dist/hooks/bridge.js (Hook 브릿지)
 - .claude/dist/hud/ (HUD statusline)
 - .claude/dist/mcp/server.js (MCP 서버)
-- .claude/commands/ (시스템 5개 + 프로젝트 고유 N개 보존)
+- .claude/commands/ (시스템 8개 + 프로젝트 고유 N개 보존)
+- .claude/scripts/ (messenger.sh, context-monitor.mjs)
 - .claude/db/ (init.sql, helper.sh — context.db 유지)
 - .claude/settings.json (시스템 hooks + 프로젝트 고유 설정 머지)
 - .mcp.json (MCP 서버 자동 시작 설정)
