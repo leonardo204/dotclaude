@@ -191,6 +191,28 @@ chmod +x .claude/scripts/*.sh 2>/dev/null || true
 cp "$SRC"/.mcp.json .mcp.json
 ```
 
+### 4-b단계: 글로벌 파일 동기화
+
+프로젝트 로컬뿐 아니라 `~/.claude/`의 글로벌 파일도 최신으로 업데이트한다.
+Hook이 글로벌 경로(`~/.claude/scripts/`)를 참조하므로, 이 단계를 누락하면 구버전 스크립트가 실행된다.
+
+```bash
+GLOBAL_SRC="$DOTCLAUDE_TMP/global"
+
+# 글로벌 scripts — messenger.sh, context-monitor.mjs 등
+mkdir -p ~/.claude/scripts
+cp "$GLOBAL_SRC"/scripts/*.sh ~/.claude/scripts/
+cp "$GLOBAL_SRC"/scripts/*.mjs ~/.claude/scripts/ 2>/dev/null || true
+chmod +x ~/.claude/scripts/*.sh 2>/dev/null || true
+
+# 글로벌 commands — dotclaude-init, dotclaude-update 등
+mkdir -p ~/.claude/commands
+cp "$GLOBAL_SRC"/commands/*.md ~/.claude/commands/
+
+# 글로벌 CLAUDE.md
+cp "$GLOBAL_SRC"/CLAUDE.md ~/.claude/CLAUDE.md
+```
+
 ### 5단계: settings.json 처리
 
 #### 프로젝트 고유 설정이 없는 경우
@@ -353,18 +375,21 @@ rm -rf "$DOTCLAUDE_TMP"
 
 설치 소스: https://github.com/leonardo204/dotclaude
 
-클린 설치:
-- .claude/agents/ (시스템 7개 + 프로젝트 고유 N개 보존)
-- .claude/dist/hooks/bridge.js (Hook 브릿지)
-- .claude/dist/hud/ (HUD statusline)
-- .claude/dist/mcp/server.js (MCP 서버)
-- .claude/commands/ (시스템 8개 + 프로젝트 고유 N개 보존)
-- .claude/scripts/ (messenger.sh, context-monitor.mjs)
-- .claude/db/ (init.sql, helper.sh — context.db 유지)
-- .claude/settings.json (시스템 hooks + 프로젝트 고유 설정 머지)
+프로젝트 로컬 (.claude/):
+- agents/ (시스템 7개 + 프로젝트 고유 N개 보존)
+- dist/hooks/bridge.js, dist/hud/, dist/mcp/server.js
+- commands/ (시스템 8개 + 프로젝트 고유 N개 보존)
+- scripts/ (messenger.sh, context-monitor.mjs)
+- db/ (init.sql, helper.sh — context.db 유지)
+- settings.json (시스템 hooks + 프로젝트 고유 설정 머지)
 - .mcp.json (MCP 서버 자동 시작 설정)
-- {DOC_ROOT}/claude/ (ref-docs 4개 — context-db, context-monitor, conventions, setup)
-- CLAUDE.md (글로벌 참조 안내 + PROJECT=보존, ref-docs 경로 치환 완료)
+- {DOC_ROOT}/claude/ (ref-docs 4개)
+- CLAUDE.md (PROJECT 보존, ref-docs 경로 치환)
+
+글로벌 (~/.claude/):
+- scripts/ (messenger.sh, context-monitor.mjs)
+- commands/ (dotclaude-init, dotclaude-update)
+- CLAUDE.md
 
 다음 단계:
 1. CLAUDE.md PROJECT 섹션 확인
