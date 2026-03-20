@@ -7,7 +7,6 @@
     "build:watch": "node build.mjs --watch"
   },
   "devDependencies": {
-    "@modelcontextprotocol/sdk": "^1.26.0",
     "@types/node": "^25.4.0",
     "esbuild": "^0.25.0",
     "typescript": "^5.7.0",

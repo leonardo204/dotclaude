@@ -61,7 +61,7 @@ if [ "${FORCE}" = false ]; then
     echo "  ~/.claude/scripts/context-monitor.mjs  (legacy)"
     echo "  ~/.claude/scripts/messenger.sh"
     echo "  ~/.claude/messenger.json  (Telegram 설정)"
-    echo "  ~/.claude/dist/  (bridge, HUD, MCP)"
+    echo "  ~/.claude/dist/  (bridge, HUD)"
     echo ""
     echo "Any other files in ~/.claude/ will be preserved."
     echo ""

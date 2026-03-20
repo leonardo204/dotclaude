@@ -53,7 +53,7 @@ for f in "$SRC"/agents/*.md; do
 done
 
 # 시스템 dist/ 파일 중 프로젝트에서 커스터마이징한 것
-for f in "$SRC"/dist/hooks/* "$SRC"/dist/hud/* "$SRC"/dist/mcp/*; do
+for f in "$SRC"/dist/hooks/* "$SRC"/dist/hud/*; do
     [ -f "$f" ] || continue
     rel="${f#$SRC/}"
     if [ -f ".claude/$rel" ]; then
@@ -135,7 +135,7 @@ cat "$SRC/settings.json"
 ### 2단계: 디렉토리 구조 생성
 
 ```bash
-mkdir -p .claude/agents .claude/db .claude/dist/hooks .claude/dist/hud .claude/dist/mcp .claude/commands .claude/scripts
+mkdir -p .claude/agents .claude/db .claude/dist/hooks .claude/dist/hud .claude/commands .claude/scripts
 ```
 
 ### 3단계: 파일 복사 (project-local → .claude/)
@@ -150,11 +150,9 @@ cp "$SRC"/agents/*.md .claude/agents/
 cp "$SRC"/db/init.sql .claude/db/
 cp "$SRC"/db/helper.sh .claude/db/
 
-# dist/ — bridge (hooks), HUD, MCP 서버
+# dist/ — bridge (hooks), HUD
 cp -r "$SRC"/dist/hooks/* .claude/dist/hooks/
 cp -r "$SRC"/dist/hud/* .claude/dist/hud/
-cp -r "$SRC"/dist/mcp/* .claude/dist/mcp/
-
 # Commands (8개)
 cp "$SRC"/commands/*.md .claude/commands/
 
@@ -166,8 +164,6 @@ chmod +x .claude/scripts/*.sh 2>/dev/null || true
 # settings.json
 cp "$SRC"/settings.json .claude/settings.json
 
-# .mcp.json — MCP 서버 자동 시작 설정
-cp "$SRC"/.mcp.json .mcp.json
 ```
 
 ### 4단계: Context DB 초기화
@@ -348,11 +344,9 @@ rm -rf "$DOTCLAUDE_TMP"
 - .claude/db/ (Context DB + Helper CLI)
 - .claude/dist/hooks/bridge.js (Hook 브릿지)
 - .claude/dist/hud/ (HUD statusline)
-- .claude/dist/mcp/server.js (MCP 서버)
 - .claude/scripts/ (messenger.sh, context-monitor.mjs)
 - .claude/commands/ (8개 커스텀 명령어)
 - .claude/settings.json (Hook 등록 + HUD)
-- .mcp.json (MCP 서버 자동 시작 설정)
 - {DOC_ROOT}/claude/ (ref-docs 4개 — context-db, context-monitor, conventions, setup)
 - CLAUDE.md (PROJECT 섹션 작성 필요, ref-docs 경로 치환 완료)
 

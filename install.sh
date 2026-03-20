@@ -215,7 +215,7 @@ if [ ! -d "${TMPDIR_CLONE}/project-local/dist" ]; then
   error "dist/ not found in repo. Build required before release."
   exit 1
 fi
-mkdir -p "${DOTCLAUDE_DIR}/dist/hooks" "${DOTCLAUDE_DIR}/dist/hud" "${DOTCLAUDE_DIR}/dist/mcp"
+mkdir -p "${DOTCLAUDE_DIR}/dist/hooks" "${DOTCLAUDE_DIR}/dist/hud"
 cp -r "${TMPDIR_CLONE}/project-local/dist/"* "${DOTCLAUDE_DIR}/dist/"
 ok "dist/ files installed."
 

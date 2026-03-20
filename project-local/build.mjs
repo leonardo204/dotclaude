@@ -15,7 +15,6 @@ const baseOptions = {
   bundle: true,
   external: [
     'node:*',
-    '@modelcontextprotocol/*',
   ],
 };
 
@@ -23,7 +22,6 @@ const entryPoints = [
   { in: 'src/hooks/bridge.ts', out: 'dist/hooks/bridge' },
   { in: 'src/hud/statusline.ts', out: 'dist/hud/statusline' },
   { in: 'src/hud/fetcher.ts', out: 'dist/hud/fetcher' },
-  { in: 'src/mcp/server.ts', out: 'dist/mcp/server' },
 ];
 
 if (isWatch) {
@@ -49,5 +47,5 @@ if (isWatch) {
       })
     )
   );
-  console.log('[build] done → dist/hooks/bridge.js, dist/hud/statusline.js, dist/hud/fetcher.js, dist/mcp/server.js');
+  console.log('[build] done → dist/hooks/bridge.js, dist/hud/statusline.js, dist/hud/fetcher.js');
 }
