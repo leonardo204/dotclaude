@@ -11,7 +11,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "HOOK_EVENT=session-start node --no-warnings=ExperimentalWarning \"$(git rev-parse --show-toplevel 2>/dev/null || echo .)/.claude/dist/hooks/bridge.js\""
+            "command": "_B=\"$(git rev-parse --show-toplevel 2>/dev/null || echo .)/.claude/dist/hooks/bridge.js\"; [ -f \"$_B\" ] || _B=\"$HOME/.claude/dist/hooks/bridge.js\"; HOOK_EVENT=session-start node --no-warnings=ExperimentalWarning \"$_B\""
           }
         ]
       },
@@ -31,7 +31,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "HOOK_EVENT=prompt node --no-warnings=ExperimentalWarning \"$(cat .claude/.project_root 2>/dev/null || git rev-parse --show-toplevel 2>/dev/null || echo .)/.claude/dist/hooks/bridge.js\""
+            "command": "_B=\"$(cat .claude/.project_root 2>/dev/null || git rev-parse --show-toplevel 2>/dev/null || echo .)/.claude/dist/hooks/bridge.js\"; [ -f \"$_B\" ] || _B=\"$HOME/.claude/dist/hooks/bridge.js\"; HOOK_EVENT=prompt node --no-warnings=ExperimentalWarning \"$_B\""
           }
         ]
       },
@@ -60,7 +60,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "HOOK_EVENT=post-edit node --no-warnings=ExperimentalWarning \"$(cat .claude/.project_root 2>/dev/null || git rev-parse --show-toplevel 2>/dev/null || echo .)/.claude/dist/hooks/bridge.js\""
+            "command": "_B=\"$(cat .claude/.project_root 2>/dev/null || git rev-parse --show-toplevel 2>/dev/null || echo .)/.claude/dist/hooks/bridge.js\"; [ -f \"$_B\" ] || _B=\"$HOME/.claude/dist/hooks/bridge.js\"; HOOK_EVENT=post-edit node --no-warnings=ExperimentalWarning \"$_B\""
           }
         ]
       },
@@ -69,7 +69,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "HOOK_EVENT=post-bash node --no-warnings=ExperimentalWarning \"$(cat .claude/.project_root 2>/dev/null || git rev-parse --show-toplevel 2>/dev/null || echo .)/.claude/dist/hooks/bridge.js\""
+            "command": "_B=\"$(cat .claude/.project_root 2>/dev/null || git rev-parse --show-toplevel 2>/dev/null || echo .)/.claude/dist/hooks/bridge.js\"; [ -f \"$_B\" ] || _B=\"$HOME/.claude/dist/hooks/bridge.js\"; HOOK_EVENT=post-bash node --no-warnings=ExperimentalWarning \"$_B\""
           }
         ]
       }
@@ -80,7 +80,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "HOOK_EVENT=stop-session node --no-warnings=ExperimentalWarning \"$(cat .claude/.project_root 2>/dev/null || git rev-parse --show-toplevel 2>/dev/null || echo .)/.claude/dist/hooks/bridge.js\""
+            "command": "_B=\"$(cat .claude/.project_root 2>/dev/null || git rev-parse --show-toplevel 2>/dev/null || echo .)/.claude/dist/hooks/bridge.js\"; [ -f \"$_B\" ] || _B=\"$HOME/.claude/dist/hooks/bridge.js\"; HOOK_EVENT=stop-session node --no-warnings=ExperimentalWarning \"$_B\""
           }
         ]
       },
@@ -89,7 +89,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "HOOK_EVENT=stop-ralph node --no-warnings=ExperimentalWarning \"$(cat .claude/.project_root 2>/dev/null || git rev-parse --show-toplevel 2>/dev/null || echo .)/.claude/dist/hooks/bridge.js\""
+            "command": "_B=\"$(cat .claude/.project_root 2>/dev/null || git rev-parse --show-toplevel 2>/dev/null || echo .)/.claude/dist/hooks/bridge.js\"; [ -f \"$_B\" ] || _B=\"$HOME/.claude/dist/hooks/bridge.js\"; HOOK_EVENT=stop-ralph node --no-warnings=ExperimentalWarning \"$_B\""
           }
         ]
       },
