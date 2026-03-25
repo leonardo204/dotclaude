@@ -28,6 +28,48 @@ SRC="$DOTCLAUDE_TMP/project-local"
 
 클론 실패 시 중단.
 
+### 2-b단계: 커맨드 자가 업데이트
+
+repo의 최신 커맨드와 현재 실행 중인 커맨드를 비교한다.
+다르면 글로벌 커맨드 파일을 교체하고, 사용자에게 재실행을 안내한 뒤 **이번 실행은 중단**한다.
+
+```bash
+if ! diff -q "$DOTCLAUDE_TMP/global/commands/dotclaude-update.md" ~/.claude/commands/dotclaude-update.md >/dev/null 2>&1; then
+    echo "[self-update] dotclaude-update 커맨드가 업데이트되었습니다."
+fi
+```
+
+**커맨드가 변경된 경우:**
+1. 글로벌 커맨드 교체: `cp "$DOTCLAUDE_TMP/global/commands/"*.md ~/.claude/commands/`
+2. 글로벌 설정 즉시 동기화 (재실행 없이도 핵심 수정 적용):
+   ```bash
+   # dist/ 동기화
+   mkdir -p ~/.claude/dist/hooks ~/.claude/dist/hud
+   cp -r "$DOTCLAUDE_TMP/project-local"/dist/hooks/* ~/.claude/dist/hooks/
+   cp -r "$DOTCLAUDE_TMP/project-local"/dist/hud/* ~/.claude/dist/hud/
+
+   # settings.json hooks 머지
+   node -e "
+     const fs = require('fs');
+     const cur = JSON.parse(fs.readFileSync(process.env.HOME + '/.claude/settings.json', 'utf8'));
+     const src = JSON.parse(fs.readFileSync('$DOTCLAUDE_TMP/global/settings.json', 'utf8'));
+     cur.hooks = src.hooks;
+     if (src.statusLine && !cur.statusLine && !fs.existsSync(process.env.HOME + '/.claude/.hud_disabled')) {
+       cur.statusLine = src.statusLine;
+     }
+     fs.writeFileSync(process.env.HOME + '/.claude/settings.json', JSON.stringify(cur, null, 2) + '\n');
+   "
+   ```
+3. 사용자에게 안내:
+   ```
+   dotclaude-update 커맨드가 최신 버전으로 교체되었습니다.
+   글로벌 설정(hooks, dist/)도 즉시 동기화했습니다.
+   `/dotclaude-update`를 다시 실행하면 프로젝트 파일도 최신으로 업데이트됩니다.
+   ```
+4. `rm -rf "$DOTCLAUDE_TMP"` 후 **중단** (프로젝트 파일 업데이트는 재실행 시 수행)
+
+**커맨드가 동일한 경우:** 다음 단계(3단계)로 계속 진행.
+
 ### 3단계: 충돌 영향 분석
 
 클린 설치 전에 기존 프로젝트 파일과의 충돌을 분석하여 사용자에게 리포트한다.
@@ -190,7 +232,7 @@ chmod +x .claude/scripts/*.sh 2>/dev/null || true
 ### 4-b단계: 글로벌 파일 동기화
 
 프로젝트 로컬뿐 아니라 `~/.claude/`의 글로벌 파일도 최신으로 업데이트한다.
-Hook이 글로벌 경로(`~/.claude/scripts/`)를 참조하므로, 이 단계를 누락하면 구버전 스크립트가 실행된다.
+Hook이 글로벌 경로(`~/.claude/scripts/`, `~/.claude/dist/`)를 참조하므로, 이 단계를 누락하면 구버전 스크립트가 실행된다.
 
 ```bash
 GLOBAL_SRC="$DOTCLAUDE_TMP/global"
@@ -207,6 +249,23 @@ cp "$GLOBAL_SRC"/commands/*.md ~/.claude/commands/
 
 # 글로벌 CLAUDE.md
 cp "$GLOBAL_SRC"/CLAUDE.md ~/.claude/CLAUDE.md
+
+# 글로벌 dist/ — bridge, HUD
+mkdir -p ~/.claude/dist/hooks ~/.claude/dist/hud
+cp -r "$DOTCLAUDE_TMP/project-local"/dist/hooks/* ~/.claude/dist/hooks/
+cp -r "$DOTCLAUDE_TMP/project-local"/dist/hud/* ~/.claude/dist/hud/
+
+# 글로벌 settings.json — hooks만 머지 (사용자 커스텀 설정 보존)
+node -e "
+  const fs = require('fs');
+  const cur = JSON.parse(fs.readFileSync(process.env.HOME + '/.claude/settings.json', 'utf8'));
+  const src = JSON.parse(fs.readFileSync('$GLOBAL_SRC/settings.json', 'utf8'));
+  cur.hooks = src.hooks;
+  if (src.statusLine && !cur.statusLine && !fs.existsSync(process.env.HOME + '/.claude/.hud_disabled')) {
+    cur.statusLine = src.statusLine;
+  }
+  fs.writeFileSync(process.env.HOME + '/.claude/settings.json', JSON.stringify(cur, null, 2) + '\n');
+"
 ```
 
 ### 5단계: settings.json 처리
@@ -385,6 +444,8 @@ rm -rf "$DOTCLAUDE_TMP"
 - scripts/ (messenger.sh, context-monitor.mjs)
 - commands/ (dotclaude-init, dotclaude-update)
 - CLAUDE.md
+- dist/ (bridge.js, statusline.js, fetcher.js)
+- settings.json (hooks 머지)
 
 다음 단계:
 1. CLAUDE.md PROJECT 섹션 확인
