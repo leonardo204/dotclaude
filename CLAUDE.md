@@ -39,6 +39,7 @@
 
 - **global ↔ project-local 동기화 필수**: context-monitor.mjs 등 공유 파일 수정 시 양쪽 모두 반영. 한쪽만 수정하면 update 시 구버전 배포됨
 - **글로벌 파일 수정 시 `~/.claude/`에도 복사**: `global/CLAUDE.md` → `~/.claude/CLAUDE.md`, `global/commands/` → `~/.claude/commands/`, `global/scripts/` → `~/.claude/scripts/`
+- **Hook은 bridge.js 단일 진입점**: 모든 hook(PostToolUse 포함)은 bridge.js를 호출. bash 스크립트 직접 호출 금지 → [Hooks 아키텍처](ref-docs/hooks.md)
 - **Hook stdout 가시성 제약 준수**: `SessionStart`/`UserPromptSubmit`만 컨텍스트 주입 가능. `Stop`은 JSON 프로토콜(`{"decision":"block"}`)만 지원
 - **init/update 명령은 repo clone 방식**: 파일 내용을 기억해서 작성 금지, 반드시 `project-local/`에서 복사
 - **Mermaid 다이어그램 작성 시** → [컨벤션](ref-docs/conventions.md) 참조 (괄호 금지, 넘버링 규칙 등)
@@ -52,7 +53,8 @@
 | `global/CLAUDE.md` | → `~/.claude/CLAUDE.md` |
 | `global/commands/*.md` | → `~/.claude/commands/` |
 | `global/scripts/context-monitor.mjs` | → `~/.claude/scripts/` + `project-local/scripts/` |
-| `project-local/hooks/*.sh` | 이 프로젝트 `.claude/hooks/`에도 반영 |
+| `project-local/hooks/*.sh` | 레거시 — settings.json에서 미참조. bridge.js 내부 로직만 사용 |
+| `project-local/settings.json` | hooks 섹션은 `global/settings.json`과 동일하게 유지 (statusLine만 다름) |
 | `project-local/scripts/context-monitor.mjs` | → `global/scripts/` + `~/.claude/scripts/` |
 | `project-local/scripts/messenger.sh` | → `global/scripts/` + `.claude/scripts/` + `~/.claude/scripts/` |
 | `install.sh` | `global/` 디렉토리 구조와 복사 대상 일치 확인 |
@@ -61,4 +63,4 @@
 
 ---
 
-*최종 업데이트: 2026-03-11*
+*최종 업데이트: 2026-03-27*
