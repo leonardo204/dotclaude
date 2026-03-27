@@ -621,9 +621,13 @@ async function handlePostBash({ db, stdinData }) {
   const errType = classifyError(combined);
   if (!errType) return;
   const errFile = extractFile(combined);
-  db.errorLog(errType, errFile || void 0);
-  const errInfo = `${errType}: ${errFile || "unknown"}`;
-  db.liveSet("error_context", errInfo);
+  try {
+    db.errorLog(errType, errFile || void 0);
+    const errInfo = `${errType}: ${errFile || "unknown"}`;
+    db.liveSet("error_context", errInfo);
+  } catch {
+    // DB write failure is non-fatal — ignore silently
+  }
 }
 
 // src/hooks/events/stop-session.ts
@@ -784,7 +788,7 @@ async function main() {
         break;
     }
   } finally {
-    db.close();
+    try { db.close(); } catch { /* ignore close errors */ }
   }
 }
 main().catch((err) => {
