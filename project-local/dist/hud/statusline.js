@@ -7,6 +7,7 @@ import {
   statSync
 } from "node:fs";
 import { join } from "node:path";
+import { execSync } from "node:child_process";
 import { homedir } from "node:os";
 var C = {
   red: "\x1B[31m",
@@ -179,7 +180,18 @@ async function main() {
       parts.push(`${C.dim}[CC#${ver}]${C.reset}`);
     }
     const cwd = stdin.workspace?.current_dir ?? stdin.cwd ?? process.cwd();
-    parts.push(`${C.cyan}${shortenCwd(cwd)}${C.reset}`);
+    let branchName = "";
+    try {
+      branchName = execSync("git rev-parse --abbrev-ref HEAD", {
+        cwd,
+        encoding: "utf8",
+        timeout: 2e3,
+        stdio: ["ignore", "pipe", "ignore"]
+      }).trim();
+    } catch {
+    }
+    const branchPart = branchName ? ` ${C.dim}(${C.reset}${C.green}${branchName}${C.reset}${C.dim})${C.reset}` : "";
+    parts.push(`${C.cyan}${shortenCwd(cwd)}${C.reset}${branchPart}`);
     const cache = loadHudCache();
     if (cache !== null) {
       const limitParts = [];

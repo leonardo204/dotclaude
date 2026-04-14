@@ -9,7 +9,7 @@
  * - ~/.claude/projects/: 서브에이전트 카운팅
  *
  * 출력 형식:
- * [CC#1.0] | ~/work/project | 5h:38%(3h42m) wk:12%(2d5h) | Opus | ctx:14% | agents:0
+ * [CC#1.0] | ~/work/project (main) | 5h:38%(3h42m) wk:12%(2d5h) | Opus | ctx:14% | agents:0
  */
 
 import {
@@ -20,6 +20,7 @@ import {
   statSync,
 } from "node:fs";
 import { join } from "node:path";
+import { execSync } from "node:child_process";
 import { homedir } from "node:os";
 
 // ── ANSI Colors ──
@@ -302,10 +303,24 @@ async function main(): Promise<void> {
       parts.push(`${C.dim}[CC#${ver}]${C.reset}`);
     }
 
-    // 2. CWD
+    // 2. CWD + Git branch
     const cwd =
       stdin.workspace?.current_dir ?? stdin.cwd ?? process.cwd();
-    parts.push(`${C.cyan}${shortenCwd(cwd)}${C.reset}`);
+    let branchName = "";
+    try {
+      branchName = execSync("git rev-parse --abbrev-ref HEAD", {
+        cwd,
+        encoding: "utf8",
+        timeout: 2000,
+        stdio: ["ignore", "pipe", "ignore"],
+      }).trim();
+    } catch {
+      // not a git repo or git not available
+    }
+    const branchPart = branchName
+      ? ` ${C.dim}(${C.reset}${C.green}${branchName}${C.reset}${C.dim})${C.reset}`
+      : "";
+    parts.push(`${C.cyan}${shortenCwd(cwd)}${C.reset}${branchPart}`);
 
     // 3. Rate limits — 캐시 파일에서만 읽음 (API 호출 없음)
     const cache = loadHudCache();
