@@ -97,7 +97,15 @@ function formatDuration(ms) {
   return rh > 0 ? `${d}d${rh}h` : `${d}d`;
 }
 function renderLimit(label, info) {
-  if (!info || info.utilization == null) return null;
+  if (!info || info.utilization == null) {
+    return `${label}:${C.dim}--%${C.reset}`;
+  }
+  if (info.resets_at) {
+    const resetTime = new Date(info.resets_at).getTime();
+    if (resetTime <= Date.now()) {
+      return `${label}:${C.dim}--%${C.reset}`;
+    }
+  }
   const raw = info.utilization;
   const pct = Math.round(raw >= 1 ? raw : raw * 100);
   const resetStr = info.resets_at ? formatDuration(new Date(info.resets_at).getTime() - Date.now()) : null;
@@ -193,22 +201,9 @@ async function main() {
     const branchPart = branchName ? ` ${C.dim}(${C.reset}${C.green}${branchName}${C.reset}${C.dim})${C.reset}` : "";
     parts.push(`${C.cyan}${shortenCwd(cwd)}${C.reset}${branchPart}`);
     const cache = loadHudCache();
-    if (cache !== null) {
-      const limitParts = [];
-      if (!cache.five_hour && !cache.seven_day) {
-        limitParts.push(`5h:${C.dim}--%${C.reset} wk:${C.dim}--%${C.reset}`);
-      } else {
-        const fiveH = renderLimit("5h", cache.five_hour);
-        const weekly = renderLimit("wk", cache.seven_day);
-        if (fiveH) limitParts.push(fiveH);
-        if (weekly) limitParts.push(weekly);
-      }
-      if (limitParts.length > 0) {
-        parts.push(limitParts.join(" "));
-      }
-    } else {
-      parts.push(`5h:${C.dim}--%${C.reset} wk:${C.dim}--%${C.reset}`);
-    }
+    const fiveH = renderLimit("5h", cache?.five_hour);
+    const weekly = renderLimit("wk", cache?.seven_day);
+    parts.push(`${fiveH} ${weekly}`);
     const modelName = stdin.model?.display_name;
     if (modelName) {
       parts.push(`${C.bold}${modelName}${C.reset}`);

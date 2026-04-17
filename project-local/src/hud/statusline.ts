@@ -175,8 +175,20 @@ function formatDuration(ms: number): string | null {
 }
 
 // ── Rate limit 렌더링 ──
-function renderLimit(label: string, info: UsageInfo | undefined): string | null {
-  if (!info || info.utilization == null) return null;
+function renderLimit(label: string, info: UsageInfo | undefined): string {
+  // 데이터 없음
+  if (!info || info.utilization == null) {
+    return `${label}:${C.dim}--%${C.reset}`;
+  }
+
+  // resets_at이 과거 시점이면 데이터 만료 — fetcher가 새 값을 못 가져온 상태
+  // (rate limit/network error 등). 오래된 %를 그대로 보여주면 오히려 오해를 유발.
+  if (info.resets_at) {
+    const resetTime = new Date(info.resets_at).getTime();
+    if (resetTime <= Date.now()) {
+      return `${label}:${C.dim}--%${C.reset}`;
+    }
+  }
 
   const raw = info.utilization;
   const pct = Math.round(raw >= 1 ? raw : raw * 100);
@@ -323,25 +335,11 @@ async function main(): Promise<void> {
     parts.push(`${C.cyan}${shortenCwd(cwd)}${C.reset}${branchPart}`);
 
     // 3. Rate limits — 캐시 파일에서만 읽음 (API 호출 없음)
+    // renderLimit은 만료/없음을 모두 처리해 "--%"를 반환하므로 호출부는 단순함
     const cache = loadHudCache();
-    if (cache !== null) {
-      const limitParts: string[] = [];
-      if (!cache.five_hour && !cache.seven_day) {
-        // 캐시 있지만 데이터 없음 → "--%" 표시
-        limitParts.push(`5h:${C.dim}--%${C.reset} wk:${C.dim}--%${C.reset}`);
-      } else {
-        const fiveH = renderLimit("5h", cache.five_hour);
-        const weekly = renderLimit("wk", cache.seven_day);
-        if (fiveH) limitParts.push(fiveH);
-        if (weekly) limitParts.push(weekly);
-      }
-      if (limitParts.length > 0) {
-        parts.push(limitParts.join(" "));
-      }
-    } else {
-      // 캐시 파일 없음 → "--%" 표시
-      parts.push(`5h:${C.dim}--%${C.reset} wk:${C.dim}--%${C.reset}`);
-    }
+    const fiveH = renderLimit("5h", cache?.five_hour);
+    const weekly = renderLimit("wk", cache?.seven_day);
+    parts.push(`${fiveH} ${weekly}`);
 
     // 4. Model
     const modelName = stdin.model?.display_name;

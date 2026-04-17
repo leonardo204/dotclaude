@@ -38,6 +38,15 @@ interface HudCache {
   seven_day?: UsageInfo;
 }
 
+// ── 유효성 검사 ──
+// resets_at이 과거면 데이터는 이미 만료된 것. fetcher가 새 값을 얻을 때까지
+// 그 값을 보존하는 것은 statusline에 오래된 %를 계속 보여주므로 오해를 유발함.
+function isUsageInfoFresh(info: UsageInfo | undefined): boolean {
+  if (!info) return false;
+  if (!info.resets_at) return true;
+  return new Date(info.resets_at).getTime() > Date.now();
+}
+
 // ── PID 파일 관리 ──
 function writePid(): void {
   try {
@@ -96,13 +105,13 @@ function saveCache(data: Partial<HudCache>): void {
 async function fetchUsage(): Promise<void> {
   const token = await getOAuthToken();
   if (!token) {
-    // 토큰 없음 — 캐시에 오류 기록 (기존 데이터 보존)
+    // 토큰 없음 — 캐시에 오류 기록 (유효한 기존 데이터만 보존)
     const existing = loadCache();
     const stale: HudCache = {
       _ts: Date.now(),
       _ok: false,
-      ...(existing?.five_hour ? { five_hour: existing.five_hour } : {}),
-      ...(existing?.seven_day ? { seven_day: existing.seven_day } : {}),
+      ...(isUsageInfoFresh(existing?.five_hour) ? { five_hour: existing!.five_hour } : {}),
+      ...(isUsageInfoFresh(existing?.seven_day) ? { seven_day: existing!.seven_day } : {}),
     };
     saveCache(stale);
     return;
@@ -133,8 +142,8 @@ async function fetchUsage(): Promise<void> {
         _ok: false,
         _rateLimited: true,
         _rlCount: rlCount,
-        ...(existing?.five_hour ? { five_hour: existing.five_hour } : {}),
-        ...(existing?.seven_day ? { seven_day: existing.seven_day } : {}),
+        ...(isUsageInfoFresh(existing?.five_hour) ? { five_hour: existing!.five_hour } : {}),
+        ...(isUsageInfoFresh(existing?.seven_day) ? { seven_day: existing!.seven_day } : {}),
       });
       console.error(`[fetcher] rate limited (count: ${rlCount})`);
       return;
@@ -153,21 +162,21 @@ async function fetchUsage(): Promise<void> {
       return;
     }
 
-    // API 에러 (인증 실패 등) — 기존 데이터 보존
+    // API 에러 (인증 실패 등) — 유효한 기존 데이터만 보존
     saveCache({
       _ts: Date.now(),
       _ok: false,
-      ...(existing?.five_hour ? { five_hour: existing.five_hour } : {}),
-      ...(existing?.seven_day ? { seven_day: existing.seven_day } : {}),
+      ...(isUsageInfoFresh(existing?.five_hour) ? { five_hour: existing!.five_hour } : {}),
+      ...(isUsageInfoFresh(existing?.seven_day) ? { seven_day: existing!.seven_day } : {}),
     });
     console.error("[fetcher] API returned unexpected response:", JSON.stringify(data));
   } catch (err) {
-    // 네트워크 에러 — 기존 데이터 보존
+    // 네트워크 에러 — 유효한 기존 데이터만 보존
     saveCache({
       _ts: Date.now(),
       _ok: false,
-      ...(existing?.five_hour ? { five_hour: existing.five_hour } : {}),
-      ...(existing?.seven_day ? { seven_day: existing.seven_day } : {}),
+      ...(isUsageInfoFresh(existing?.five_hour) ? { five_hour: existing!.five_hour } : {}),
+      ...(isUsageInfoFresh(existing?.seven_day) ? { seven_day: existing!.seven_day } : {}),
     });
     console.error("[fetcher] network error:", err instanceof Error ? err.message : String(err));
   }
