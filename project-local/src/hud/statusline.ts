@@ -38,6 +38,8 @@ const C = {
 const HUD_CACHE_FILE = join(homedir(), ".claude", ".hud_cache");
 const AGENT_CACHE_FILE = join(homedir(), ".claude", ".agent_cache");
 const AGENT_CACHE_TTL = 5000; // 5초
+// transcript mtime 이 STALE_MS 이상 정체되면 고아(비정상 종료)로 간주하고 active 집계에서 제외
+const STALE_SUBAGENT_MS = Number(process.env.DOTCLAUDE_STALE_SUBAGENT_MS) || 120_000;
 
 // ── HUD Cache 형식 ──
 interface UsageInfo {
@@ -241,17 +243,37 @@ function countSubagents(sessionId: string | undefined): { active: number; total:
           (f) => f.startsWith("agent-") && f.endsWith(".jsonl")
         );
         let active = 0;
+        let live = 0; // DONE + ACTIVE (stale 고아 제외)
+        const now = Date.now();
         for (const f of transcripts) {
+          const fpath = join(sessionDir, f);
+          let isStale = false;
           try {
-            const content = readFileSync(join(sessionDir, f), "utf8").trim();
+            isStale = now - statSync(fpath).mtimeMs > STALE_SUBAGENT_MS;
+          } catch {
+            // stat 실패 시 보수적으로 stale 취급하지 않음
+          }
+          try {
+            const content = readFileSync(fpath, "utf8").trim();
             const lastLine = content.split("\n").pop() ?? "";
             const last = JSON.parse(lastLine);
-            if (!last?.message?.stop_reason) active++;
+            const done = Boolean(last?.message?.stop_reason);
+            if (done) {
+              live++;
+            } else if (!isStale) {
+              active++;
+              live++;
+            }
+            // !done && isStale → 고아 로그: active/total 모두 제외
           } catch {
-            active++;
+            // 파싱 실패 + stale 이 아니면 active 로 간주 (안전 기본값)
+            if (!isStale) {
+              active++;
+              live++;
+            }
           }
         }
-        result = { active, total: transcripts.length };
+        result = { active, total: live };
         break;
       }
     }
