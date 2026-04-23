@@ -116,6 +116,8 @@ var PID_FILE = join2(homedir2(), ".claude", ".hud_fetcher.pid");
 var FETCH_INTERVAL_MS = 15 * 60 * 1e3;
 var MAX_LIFETIME_MS = 24 * 60 * 60 * 1e3;
 var USAGE_API_URL = "https://api.anthropic.com/api/oauth/usage";
+var SIGNAL_COOLDOWN_MS = 60 * 1e3;
+var _lastSignalFetch = 0;
 function isUsageInfoFresh(info) {
   if (!info) return false;
   if (!info.resets_at) return true;
@@ -140,6 +142,10 @@ function isAlreadyRunning() {
     if (isNaN(pid) || pid === process.pid) return false;
     try {
       process.kill(pid, 0);
+      try {
+        process.kill(pid, "SIGUSR1");
+        console.log(`[fetcher] sent SIGUSR1 to running process (pid: ${pid})`);
+      } catch {}
       return true;
     } catch {
       removePid();
@@ -244,7 +250,18 @@ async function main() {
     process.exit(0);
   });
   console.log(`[fetcher] started (pid: ${process.pid})`);
+  process.on("SIGUSR1", () => {
+    const now = Date.now();
+    if (now - _lastSignalFetch < SIGNAL_COOLDOWN_MS) {
+      console.log(`[fetcher] SIGUSR1 received but cooldown active (${Math.round((SIGNAL_COOLDOWN_MS - (now - _lastSignalFetch)) / 1e3)}s remaining)`);
+      return;
+    }
+    _lastSignalFetch = now;
+    console.log("[fetcher] SIGUSR1 received, fetching immediately");
+    void fetchUsage();
+  });
   await fetchUsage();
+  _lastSignalFetch = Date.now();
   const interval = setInterval(() => {
     void fetchUsage();
   }, FETCH_INTERVAL_MS);

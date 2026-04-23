@@ -221,6 +221,10 @@ async function main() {
         if (fiveH) limitParts.push(fiveH);
         if (weekly) limitParts.push(weekly);
       }
+      const staleMinutes = cache._ts ? (Date.now() - cache._ts) / 6e4 : Infinity;
+      if (cache._ok === false && staleMinutes > 10) {
+        limitParts.push(`${C.red}auth?${C.reset}`);
+      }
       if (limitParts.length > 0) {
         parts.push(limitParts.join(" "));
       }

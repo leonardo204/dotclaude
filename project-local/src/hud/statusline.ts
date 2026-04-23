@@ -359,9 +359,16 @@ async function main(): Promise<void> {
     // 3. Rate limits — 캐시 파일에서만 읽음 (API 호출 없음)
     // renderLimit은 만료/없음을 모두 처리해 "--%"를 반환하므로 호출부는 단순함
     const cache = loadHudCache();
-    const fiveH = renderLimit("5h", cache?.five_hour);
-    const weekly = renderLimit("wk", cache?.seven_day);
-    parts.push(`${fiveH} ${weekly}`);
+    const limitParts: string[] = [];
+    limitParts.push(renderLimit("5h", cache?.five_hour));
+    limitParts.push(renderLimit("wk", cache?.seven_day));
+    const staleMinutes = cache?._ts ? (Date.now() - cache._ts) / 6e4 : Infinity;
+    if (cache?._ok === false && staleMinutes > 10) {
+      limitParts.push(`${C.red}auth?${C.reset}`);
+    }
+    if (limitParts.length > 0) {
+      parts.push(limitParts.join(" "));
+    }
 
     // 4. Model
     const modelName = stdin.model?.display_name;
