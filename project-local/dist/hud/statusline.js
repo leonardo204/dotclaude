@@ -219,9 +219,16 @@ async function main() {
     const branchPart = branchName ? ` ${C.dim}(${C.reset}${C.green}${branchName}${C.reset}${C.dim})${C.reset}` : "";
     parts.push(`${C.cyan}${shortenCwd(cwd)}${C.reset}${branchPart}`);
     const cache = loadHudCache();
-    const fiveH = renderLimit("5h", cache?.five_hour);
-    const weekly = renderLimit("wk", cache?.seven_day);
-    parts.push(`${fiveH} ${weekly}`);
+    const limitParts = [];
+    limitParts.push(renderLimit("5h", cache?.five_hour));
+    limitParts.push(renderLimit("wk", cache?.seven_day));
+    const staleMinutes = cache?._ts ? (Date.now() - cache._ts) / 6e4 : Infinity;
+    if (cache?._ok === false && staleMinutes > 10) {
+      limitParts.push(`${C.red}auth?${C.reset}`);
+    }
+    if (limitParts.length > 0) {
+      parts.push(limitParts.join(" "));
+    }
     const modelName = stdin.model?.display_name;
     if (modelName) {
       parts.push(`${C.bold}${modelName}${C.reset}`);

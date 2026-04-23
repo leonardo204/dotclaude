@@ -22,6 +22,8 @@ const PID_FILE = join(homedir(), ".claude", ".hud_fetcher.pid");
 const FETCH_INTERVAL_MS = 15 * 60 * 1000; // 15분
 const MAX_LIFETIME_MS = 24 * 60 * 60 * 1000; // 24시간
 const USAGE_API_URL = "https://api.anthropic.com/api/oauth/usage";
+var SIGNAL_COOLDOWN_MS = 60 * 1e3;
+var _lastSignalFetch = 0;
 
 // ── 캐시 파일 형식 ──
 interface UsageInfo {
@@ -72,6 +74,10 @@ function isAlreadyRunning(): boolean {
     // 프로세스가 살아있는지 확인
     try {
       process.kill(pid, 0); // signal 0: 프로세스 존재 여부만 확인
+      try {
+        process.kill(pid, "SIGUSR1");
+        console.log(`[fetcher] sent SIGUSR1 to running process (pid: ${pid})`);
+      } catch {}
       return true; // 살아있음
     } catch {
       // ESRCH: 프로세스 없음 → 스테일 PID 파일
@@ -199,8 +205,20 @@ async function main(): Promise<void> {
 
   console.log(`[fetcher] started (pid: ${process.pid})`);
 
+  process.on("SIGUSR1", () => {
+    const now = Date.now();
+    if (now - _lastSignalFetch < SIGNAL_COOLDOWN_MS) {
+      console.log(`[fetcher] SIGUSR1 received but cooldown active (${Math.round((SIGNAL_COOLDOWN_MS - (now - _lastSignalFetch)) / 1e3)}s remaining)`);
+      return;
+    }
+    _lastSignalFetch = now;
+    console.log("[fetcher] SIGUSR1 received, fetching immediately");
+    void fetchUsage();
+  });
+
   // 즉시 첫 번째 fetch
   await fetchUsage();
+  _lastSignalFetch = Date.now();
 
   // 15분마다 반복
   const interval = setInterval(() => { void fetchUsage(); }, FETCH_INTERVAL_MS);
