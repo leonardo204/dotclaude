@@ -17,6 +17,7 @@
 - 커스텀 에이전트: `subagent_type: "general-purpose"` + 프롬프트에 `.claude/agents/<name>.md` Read
 - 파이프라인: planner → architect → ralph + test-engineer → verifier → reviewer
 - 파이프라인 자동 트리거: 새 기능+2파일 이상 / 아키텍처 변경 / "구현해줘"+구체적 명세
+- 에이전트 공통 원칙: 도구 사용 명시, 범위 한정, 단일 접근 헌신, 병렬 팬아웃 → ref-docs/agent-delegation.md
 
 → 상세: ref-docs/agent-delegation.md
 
