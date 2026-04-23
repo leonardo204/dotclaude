@@ -21,6 +21,7 @@ var C = {
 var HUD_CACHE_FILE = join(homedir(), ".claude", ".hud_cache");
 var AGENT_CACHE_FILE = join(homedir(), ".claude", ".agent_cache");
 var AGENT_CACHE_TTL = 5e3;
+var STALE_SUBAGENT_MS = Number(process.env.DOTCLAUDE_STALE_SUBAGENT_MS) || 12e4;
 async function readStdin() {
   if (process.stdin.isTTY) return null;
   const chunks = [];
@@ -148,17 +149,34 @@ function countSubagents(sessionId) {
           (f) => f.startsWith("agent-") && f.endsWith(".jsonl")
         );
         let active = 0;
+        let live = 0;
+        const now = Date.now();
         for (const f of transcripts) {
+          const fpath = join(sessionDir, f);
+          let isStale = false;
           try {
-            const content = readFileSync(join(sessionDir, f), "utf8").trim();
+            isStale = now - statSync(fpath).mtimeMs > STALE_SUBAGENT_MS;
+          } catch {
+          }
+          try {
+            const content = readFileSync(fpath, "utf8").trim();
             const lastLine = content.split("\n").pop() ?? "";
             const last = JSON.parse(lastLine);
-            if (!last?.message?.stop_reason) active++;
+            const done = Boolean(last?.message?.stop_reason);
+            if (done) {
+              live++;
+            } else if (!isStale) {
+              active++;
+              live++;
+            }
           } catch {
-            active++;
+            if (!isStale) {
+              active++;
+              live++;
+            }
           }
         }
-        result = { active, total: transcripts.length };
+        result = { active, total: live };
         break;
       }
     }
