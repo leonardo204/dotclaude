@@ -199,10 +199,6 @@ ok "Global files installed."
 # ─── Step 4a: Install scripts/ from global ───
 info "Installing scripts/ files..."
 mkdir -p "${DOTCLAUDE_DIR}/scripts"
-if [ -f "${TMPDIR_CLONE}/global/scripts/context-monitor.mjs" ]; then
-    cp "${TMPDIR_CLONE}/global/scripts/context-monitor.mjs" "${DOTCLAUDE_DIR}/scripts/"
-    ok "context-monitor.mjs installed."
-fi
 if [ -f "${TMPDIR_CLONE}/global/scripts/messenger.sh" ]; then
     cp "${TMPDIR_CLONE}/global/scripts/messenger.sh" "${DOTCLAUDE_DIR}/scripts/"
     chmod +x "${DOTCLAUDE_DIR}/scripts/messenger.sh"

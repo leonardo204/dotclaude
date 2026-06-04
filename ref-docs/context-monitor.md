@@ -2,9 +2,11 @@
 
 ## 개요
 
-두 가지 역할을 하나의 스크립트(`context-monitor.mjs`)에서 수행:
+HUD statusline은 `dist/hud/statusline.js`(TypeScript 빌드 산출물)가 담당하며, 두 역할을 수행:
 1. **HUD**: 버전, CWD, 리밋, ctx%, 에이전트 수를 statusline에 표시
 2. **Compaction 대응**: context usage % 추적 → threshold 기반 live context 백업/복구
+
+> ⚠️ 구 `scripts/context-monitor.mjs`는 **제거됨** — 동일 기능이 `statusline.js`로 통합되었다. 실제 statusLine은 `dist/hud/statusline.js`이다.
 
 ### HUD 출력 예시
 
@@ -16,15 +18,15 @@
 |------|------------|
 | CC 버전 | stdin `version` |
 | CWD | stdin `workspace.current_dir` (~ 축약) |
-| 5h 리밋 | OAuth API `https://api.anthropic.com/api/oauth/usage` |
-| 주간 리밋 | OAuth API (동일) |
+| 5h 리밋 | stdin `rate_limits.five_hour` 우선, 없으면 fetcher 캐시 |
+| 주간 리밋 | stdin `rate_limits.seven_day` 우선, 없으면 fetcher 캐시 |
 | ctx% | stdin `context_window.used_percentage` |
 | agents | subagent transcript 파일 카운트 |
 
 ## 아키텍처
 
 ```
-[매 턴] Statusline → context-monitor.mjs 실행
+[매 턴] Statusline → dist/hud/statusline.js 실행
         ├─ stdin JSON 파싱 (version, workspace, context_window)
         ├─ OAuth API 호출 (캐시 90초 TTL) → rate limit 조회
         ├─ subagent transcript 파일 카운트
@@ -43,7 +45,8 @@
 
 | 파일 | 역할 |
 |------|------|
-| `.claude/scripts/context-monitor.mjs` | HUD + ctx% 캡처 통합 스크립트 |
+| `~/.claude/dist/hud/statusline.js` | HUD + ctx% 캡처 (실제 statusLine) |
+| `~/.claude/dist/hud/fetcher.js` | rate limit 백그라운드 폴백 (stdin 없을 때만) |
 | `.claude/.ctx_state` | JSON 상태 파일 (gitignore 대상) |
 | `~/.claude/.hud_cache` | OAuth API 응답 캐시 (글로벌) |
 | `.claude/db/context.db` → `live_context` 테이블 | 작업 상태 KV 저장소 |
@@ -99,13 +102,12 @@ bash .claude/db/helper.sh live-dump                 # 포맷된 전체 출력
 bash .claude/db/helper.sh live-clear                # 전체 삭제
 ```
 
-## OAuth API (Rate Limit)
+## Rate Limit 데이터 (stdin 우선)
 
-- **엔드포인트**: `https://api.anthropic.com/api/oauth/usage`
-- **인증**: macOS Keychain `Claude Code-credentials` 또는 `~/.claude/.credentials.json`
-- **응답**: `{ five_hour: { utilization, resets_at }, seven_day: { utilization, resets_at } }`
-- **캐시**: 성공 90초, 실패 15초 TTL → `~/.claude/.hud_cache`
-- 인증 실패/API 불가 시 해당 슬롯 생략 (에러 없이 동작)
+1. **1차**: Claude Code가 statusline stdin으로 주는 `rate_limits.{five_hour,seven_day}`(CC 2.1+, Pro/Max, 첫 API 응답 후). **외부 호출 없음.**
+2. **폴백**: stdin에 없을 때만 백그라운드 `dist/hud/fetcher.js`가 `api.anthropic.com/api/oauth/usage`를 OAuth로 조회 → `~/.claude/.hud_cache`(15분 갱신).
+   - 인증: macOS Keychain `Claude Code-credentials` 또는 `~/.claude/.credentials.json`
+   - 외부 전송 없음. `/dotclaude-statusline off` 또는 `~/.claude/.hud_disabled`로 비활성화.
 
 ## 색상 코딩
 
@@ -143,7 +145,7 @@ Project .claude/settings.json  >  Global ~/.claude/settings.json
 {
   "statusLine": {
     "type": "command",
-    "command": "node ~/.claude/scripts/context-monitor.mjs",
+    "command": "node --no-warnings=ExperimentalWarning ~/.claude/dist/hud/statusline.js",
     "padding": 2
   }
 }
@@ -159,7 +161,7 @@ Project .claude/settings.json  >  Global ~/.claude/settings.json
 {
   "statusLine": {
     "type": "command",
-    "command": "node .claude/scripts/context-monitor.mjs",
+    "command": "node --no-warnings=ExperimentalWarning .claude/dist/hud/statusline.js",
     "padding": 2
   }
 }
@@ -170,7 +172,7 @@ Project .claude/settings.json  >  Global ~/.claude/settings.json
 
 ## 다른 프로젝트에 적용
 
-1. `.claude/scripts/context-monitor.mjs` 복사
+1. `.claude/dist/hud/statusline.js` + `fetcher.js` 복사
 2. `.claude/hooks/on-prompt.sh`에 ctx_state 읽기 로직 추가
 3. `.claude/db/init.sql`에 `live_context` 테이블 추가
 4. `.claude/db/helper.sh`에 `live-*` 명령 추가

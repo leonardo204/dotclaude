@@ -56,7 +56,7 @@ Agent B: helper.sh agent-context <key> → DB에서 조회
 |----------|------|:----:|:----:|:---------:|
 | planner | 요청 분석 → 태스크 분해 + 수용 기준 정의 | opus | high | ❌ |
 | architect | 설계/구현 검토 + 아키텍처 타당성 검증 | opus | high | ❌ |
-| ralph | 끈질긴 구현 — 완료+검증될 때까지 절대 중단 안 함 | opus | xhigh | ✅ |
+| ralph | 끈질긴 구현 — 완료+검증될 때까지 절대 중단 안 함 | opus | high | ✅ |
 | verifier | 빌드/테스트/타입체크 증거 기반 검증 | sonnet | low | ❌ |
 | reviewer | 코드 리뷰 — 보안/정확성/품질 | opus | high | ❌ |
 | debugger | 버그/에러 근본 원인 진단 | opus | high | ❌ |
@@ -130,17 +130,18 @@ Workflow 스크립트는 파일시스템/Bash 접근이 없다(`agent()`만 가�
 
 | effort | 적합한 역할 | 배정 에이전트 |
 |--------|------------|--------------|
-| xhigh | 장기 에이전틱 구현 (공식 권장: 코딩/에이전틱 시작점) | ralph |
-| high | 깊은 추론·판단 (API 기본값) | planner, architect, reviewer, debugger |
+| high | 깊은 추론·판단, 장기 구현 (서브에이전트 최대 권장값) | planner, architect, reviewer, debugger, ralph |
 | medium | 균형형 실행 | test-engineer |
 | low | 단순 실행+판정 | verifier |
 
 배정 판단 기준:
 - **추론 깊이가 핵심**이면 opus — 하나의 정확한 판단이 중요한 역할
-- **장기 구현·에이전틱**이면 opus + xhigh — 4.8 long-horizon 개선의 수혜 (fewer compactions, better tool triggering)
+- **장기 구현·에이전틱**이면 opus + high — 4.8 long-horizon 개선의 수혜 (fewer compactions, better tool triggering)
 - **도구 호출 빈도가 높거나 단순**하면 sonnet — effort로 비용을 조절
-- **effort는 노력 수준 제어**: 분석 `high`, 장기 구현 `xhigh`, 균형 `medium`, 단순 판정 `low`
+- **effort는 노력 수준 제어**: 분석·장기 구현 `high`, 균형 `medium`, 단순 판정 `low`
+- ⚠️ **서브에이전트 frontmatter effort는 `low/medium/high/max`만 유효** — `xhigh`는 세션/API 레벨 값(ultracode 보고용)이라 서브에이전트 스코프에선 무시될 수 있다. 장기 구현도 `high`를 쓴다
 - ⚠️ **haiku는 effort 파라미터 미지원** — 노력 제어가 필요하면 sonnet + low로 배정 (verifier가 이 경우)
+- ⚠️ **토큰 부담 인지**: opus 다중 위임은 서브에이전트당 오버헤드 + 누적 비용이 크다. 한 번의 `/dotclaude-implement`가 주간 한도를 크게 소모할 수 있으니 — 소규모 작업은 수동 위임/직접 처리로, ralph 반복 상한(최대 10회)을 인지한다. 비용이 민감하면 planner/reviewer를 sonnet으로 내리는 것도 고려
 
 ## 에이전트 프롬프트 공통 원칙
 
@@ -148,7 +149,7 @@ Workflow 스크립트는 파일시스템/Bash 접근이 없다(`agent()`만 가�
 - **도구 사용 명시**: 도구가 필요한 상황을 구체적으로 지시한다 (예: "반드시 Read로 파일을 읽는다")
 - **범위 한정**: 작업 범위를 명시적으로 한정한다. 범위 밖 작업을 자의적으로 확장하지 않는다
 - **단일 접근 헌신**: 하나의 접근 방식을 선택한 뒤 끝까지 실행한다. 기존 판단과 직접 충돌하는 새 정보가 없는 한 결정을 재검토하지 않는다
-- **병렬 팬아웃 명시**: 독립 작업이 2개 이상이면 반드시 단일 메시지에 여러 Agent를 동시 호출한다
+- **병렬 팬아웃은 메인 세션 전용**: 독립 작업이 2개 이상이면 **메인 세션이** 단일 메시지에 여러 Agent를 동시 호출한다. ⚠️ 서브에이전트는 다른 서브에이전트를 생성할 수 없다(Agent/Task 도구가 서브에이전트 컨텍스트에서 제거됨) — 서브에이전트는 fan-out을 메인에 위임하거나 직접 순차 처리한다
 
 ## 모호한 요청 대응
 

@@ -71,6 +71,27 @@ interface StdinData {
   };
   model?: { display_name?: string };
   session_id?: string;
+  // CC 2.1+ : Pro/Max 구독자에게 첫 API 응답 후 제공 (각 윈도우 독립적으로 absent 가능)
+  rate_limits?: {
+    five_hour?: { used_percentage?: number; resets_at?: number | string };
+    seven_day?: { used_percentage?: number; resets_at?: number | string };
+  };
+}
+
+// stdin rate_limits(used_percentage, unix resets_at) → 내부 UsageInfo(utilization, ISO resets_at)
+function normalizeStdinLimit(
+  x: { used_percentage?: number; resets_at?: number | string } | undefined
+): UsageInfo | undefined {
+  if (!x || x.used_percentage == null) return undefined;
+  let resets_at: string | undefined;
+  if (typeof x.resets_at === "number") {
+    // unix epoch(초) 가정 — 13자리(ms)면 그대로, 10자리(s)면 ×1000
+    const ms = x.resets_at > 1e12 ? x.resets_at : x.resets_at * 1000;
+    resets_at = new Date(ms).toISOString();
+  } else if (typeof x.resets_at === "string") {
+    resets_at = x.resets_at;
+  }
+  return { utilization: x.used_percentage, resets_at };
 }
 
 // ── Stdin 읽기 ──
@@ -307,11 +328,11 @@ function countSubagents(sessionId: string | undefined): { active: number; total:
 // ── Context % 렌더링 ──
 function renderContext(percent: number): string {
   const color =
-    percent >= 80 ? C.red : percent >= 60 ? C.yellow : C.green;
+    percent >= 85 ? C.red : percent >= 70 ? C.yellow : C.green;
   const suffix =
-    percent >= 85
+    percent >= 90
       ? " CRITICAL"
-      : percent >= 75
+      : percent >= 80
         ? " COMPRESS?"
         : "";
   return `ctx:${color}${percent}%${suffix}${C.reset}`;
@@ -356,15 +377,19 @@ async function main(): Promise<void> {
       : "";
     parts.push(`${C.cyan}${shortenCwd(cwd)}${C.reset}${branchPart}`);
 
-    // 3. Rate limits — 캐시 파일에서만 읽음 (API 호출 없음)
-    // renderLimit은 만료/없음을 모두 처리해 "--%"를 반환하므로 호출부는 단순함
-    const cache = loadHudCache();
+    // 3. Rate limits — stdin(CC 2.1+ Pro/Max, 첫 API 응답 후) 1차, 윈도우별 캐시 폴백.
+    // stdin이 주면 백그라운드 fetcher/OAuth에 의존하지 않는다(데몬은 stdin 없는 환경 폴백).
+    const sl = stdin.rate_limits;
+    const slFive = normalizeStdinLimit(sl?.five_hour);
+    const slSeven = normalizeStdinLimit(sl?.seven_day);
+    const cache = slFive && slSeven ? null : loadHudCache();
     const limitParts: string[] = [];
-    limitParts.push(renderLimit("5h", cache?.five_hour));
-    limitParts.push(renderLimit("wk", cache?.seven_day));
-    const staleMinutes = cache?._ts ? (Date.now() - cache._ts) / 6e4 : Infinity;
-    if (cache?._ok === false && staleMinutes > 10) {
-      limitParts.push(`${C.red}auth?${C.reset}`);
+    limitParts.push(renderLimit("5h", slFive ?? cache?.five_hour));
+    limitParts.push(renderLimit("wk", slSeven ?? cache?.seven_day));
+    // auth 경고는 캐시 폴백에 의존할 때만 의미 있음 (stdin 경로엔 무관)
+    if (cache && cache._ok === false) {
+      const staleMinutes = cache._ts ? (Date.now() - cache._ts) / 6e4 : Infinity;
+      if (staleMinutes > 10) limitParts.push(`${C.red}auth?${C.reset}`);
     }
     if (limitParts.length > 0) {
       parts.push(limitParts.join(" "));

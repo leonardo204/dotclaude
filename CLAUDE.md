@@ -37,7 +37,7 @@
 
 ### 핵심 규칙
 
-- **global ↔ project-local 동기화 필수**: context-monitor.mjs 등 공유 파일 수정 시 양쪽 모두 반영. 한쪽만 수정하면 update 시 구버전 배포됨
+- **global ↔ project-local 동기화 필수**: 공유 스크립트(messenger.sh)·dist 빌드 산출물 수정 시 양쪽 모두 반영. 한쪽만 수정하면 update 시 구버전 배포됨
 - **글로벌 파일 수정 시 `~/.claude/`에도 복사**: `global/CLAUDE.md` → `~/.claude/CLAUDE.md`, `global/commands/` → `~/.claude/commands/`, `global/scripts/` → `~/.claude/scripts/`
 - **Hook은 bridge.js 단일 진입점**: 모든 hook(PostToolUse 포함)은 bridge.js를 호출. bash 스크립트 직접 호출 금지 → [Hooks 아키텍처](ref-docs/hooks.md)
 - **Hook stdout 가시성 제약 준수**: `SessionStart`/`UserPromptSubmit`만 컨텍스트 주입 가능. `Stop`은 JSON 프로토콜(`{"decision":"block"}`)만 지원
@@ -52,11 +52,10 @@
 |-----------|------------|
 | `global/CLAUDE.md` | → `~/.claude/CLAUDE.md` |
 | `global/commands/*.md` | → `~/.claude/commands/` |
-| `global/scripts/context-monitor.mjs` | → `~/.claude/scripts/` + `project-local/scripts/` |
 | `project-local/hooks/*.sh` | 레거시 — settings.json에서 미참조. bridge.js 내부 로직만 사용 |
 | `project-local/settings.json` | hooks 섹션은 `global/settings.json`과 동일하게 유지 (statusLine만 다름) |
-| `project-local/scripts/context-monitor.mjs` | → `global/scripts/` + `~/.claude/scripts/` |
 | `project-local/scripts/messenger.sh` | → `global/scripts/` + `.claude/scripts/` + `~/.claude/scripts/` |
+| `project-local/src/hud/statusline.ts` | → `npm run build` → `dist/hud/statusline.js` 3곳(`project-local`·`.claude`·`~/.claude`) |
 | `project-local/db/*` (init.sql, helper.sh) | → `.claude/db/` (글로벌 db는 미배포) |
 | `project-local/src/*.ts` | → `npm run build` → dist 3곳(`project-local`·`.claude`·`~/.claude`) |
 | `project-local/workflows/*.js` | → `.claude/workflows/` (init/update가 복사) |

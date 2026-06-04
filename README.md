@@ -57,7 +57,7 @@ cd dotclaude && bash install.sh
 
 | 에이전트 | 역할 | 모델 | effort | 코드 수정 |
 |----------|------|:----:|:----:|:---------:|
-| **ralph** | 끈질긴 구현 — 빌드+테스트 통과까지 절대 멈추지 않음 | Opus | xhigh | 가능 |
+| **ralph** | 끈질긴 구현 — 빌드+테스트 통과까지 절대 멈추지 않음 | Opus | high | 가능 |
 | **planner** | 요청 분석 → 태스크 분해 + 수용 기준 정의 | Opus | high | 불가 |
 | **architect** | 설계 및 아키텍처 타당성 검토 | Opus | high | 불가 |
 | **verifier** | 빌드/테스트/타입체크 결과 기반 검증 | Sonnet | low | 불가 |
@@ -68,7 +68,7 @@ cd dotclaude && bash install.sh
 **모델·effort 배정 원칙** (Opus 4.8 기준):
 - **Opus** — 깊은 추론이 핵심인 역할(계획·설계 검토·코드 리뷰·근본 원인 진단)과 long-horizon 구현(ralph). 4.8의 long-context·도구 트리거 개선으로 구현에도 적합
 - **Sonnet** — 도구 호출 빈도가 높거나 단순한 실행 역할(테스트 작성, 빌드/테스트 검증). effort로 노력 수준 제어
-- **effort** — Opus 4.8 노력 수준 제어: 분석·판단형 `high`, 장기 구현(ralph) `xhigh`, 테스트 작성 `medium`, 검증 `low`
+- **effort** — Opus 4.8 노력 수준 제어: 분석·판단형·장기 구현(ralph) `high`, 테스트 작성 `medium`, 검증 `low` (서브에이전트 frontmatter는 `high`가 최대 권장 — `xhigh`는 세션/API 레벨 값)
 - ⚠️ Haiku 4.5는 effort 파라미터 미지원 → 노력 제어가 필요한 verifier는 Sonnet+low로 배정
 
 #### 팀 모드 (구현 파이프라인)
@@ -182,22 +182,22 @@ sequenceDiagram
     V-->>R: ✅ PASS
 ```
 
-**시나리오 4: 대규모 리팩토링** — ralph가 child agent를 생성하는 경우
+**시나리오 4: 대규모 — 메인 세션 주도 병렬** — 독립 태스크를 메인이 병렬 분배
+
+> 서브에이전트(ralph 등)는 다른 서브에이전트를 생성할 수 없습니다(Claude Code 제약). 따라서 병렬 fan-out은 **메인 세션**이 소유하며, 각 서브에이전트는 자기 태스크를 직접 수행합니다.
 
 ```mermaid
 flowchart TD
-    R[ralph<br/>전체 조율] --> Analysis[태스크 분석<br/>5개 태스크 식별]
+    M[메인 세션<br/>태스크 분석·분배] --> Phase1
 
-    Analysis --> Phase1
-
-    subgraph Phase1 [Phase 1 — 병렬 실행]
-        C1[child 1<br/>모듈 A 수정]
-        C2[child 2<br/>모듈 B 수정]
-        C3[child 3<br/>모듈 C 수정]
+    subgraph Phase1 [Phase 1 — 메인이 병렬 서브에이전트 분배]
+        C1[ralph<br/>모듈 A 수정]
+        C2[ralph<br/>모듈 B 수정]
+        C3[ralph<br/>모듈 C 수정]
     end
 
-    Phase1 --> Phase2[Phase 2 — 순차<br/>ralph: 통합 + 문서 업데이트]
-    Phase2 --> Phase3[Phase 3 — 순차<br/>ralph: 전체 빌드/테스트 검증]
+    Phase1 --> Phase2[Phase 2 — 메인: 통합 + 문서]
+    Phase2 --> Phase3[Phase 3 — verifier: 전체 빌드/테스트 검증]
 ```
 
 **시나리오 5: 대규모 작업 → Workflow** — 수십 파일·감사·마이그레이션 (Opus 4.8, opt-in)
@@ -289,6 +289,8 @@ Claude Code 하단에 현재 사용량과 환경 정보를 실시간으로 표�
 Rate limit 정보는 백그라운드에서 주기적으로 갱신되어 API 블로킹이 없습니다. HUD 표시 자체는 로컬 캐시만 읽으므로 응답 속도에 영향을 주지 않습니다.
 
 **HUD 설치 범위**: `install.sh` 실행 시 Global(모든 프로젝트), Project(dotclaude-init한 프로젝트만), Skip(미설치) 중 선택할 수 있습니다. 설치 후에도 `/dotclaude-statusline` 명령으로 언제든 on/off 전환이 가능합니다.
+
+> **Rate limit 데이터 출처 (투명성)**: 사용량(5h/wk)은 Claude Code가 statusline에 직접 주는 `rate_limits`(CC 2.1+, Pro/Max)를 **1차로** 사용합니다. 이 값이 없는 환경(첫 API 응답 전 등)에서만, 백그라운드 fetcher가 `api.anthropic.com/api/oauth/usage`를 로컬 OAuth 토큰(macOS Keychain 또는 `~/.claude/.credentials.json`)으로 조회해 캐시를 채웁니다. 외부 전송은 없으며, fetcher는 `/dotclaude-statusline off` 또는 `~/.claude/.hud_disabled`로 비활성화할 수 있습니다.
 
 ---
 

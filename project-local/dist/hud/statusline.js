@@ -22,6 +22,17 @@ var HUD_CACHE_FILE = join(homedir(), ".claude", ".hud_cache");
 var AGENT_CACHE_FILE = join(homedir(), ".claude", ".agent_cache");
 var AGENT_CACHE_TTL = 5e3;
 var STALE_SUBAGENT_MS = Number(process.env.DOTCLAUDE_STALE_SUBAGENT_MS) || 12e4;
+function normalizeStdinLimit(x) {
+  if (!x || x.used_percentage == null) return void 0;
+  let resets_at;
+  if (typeof x.resets_at === "number") {
+    const ms = x.resets_at > 1e12 ? x.resets_at : x.resets_at * 1e3;
+    resets_at = new Date(ms).toISOString();
+  } else if (typeof x.resets_at === "string") {
+    resets_at = x.resets_at;
+  }
+  return { utilization: x.used_percentage, resets_at };
+}
 async function readStdin() {
   if (process.stdin.isTTY) return null;
   const chunks = [];
@@ -190,8 +201,8 @@ function countSubagents(sessionId) {
   return result;
 }
 function renderContext(percent) {
-  const color = percent >= 80 ? C.red : percent >= 60 ? C.yellow : C.green;
-  const suffix = percent >= 85 ? " CRITICAL" : percent >= 75 ? " COMPRESS?" : "";
+  const color = percent >= 85 ? C.red : percent >= 70 ? C.yellow : C.green;
+  const suffix = percent >= 90 ? " CRITICAL" : percent >= 80 ? " COMPRESS?" : "";
   return `ctx:${color}${percent}%${suffix}${C.reset}`;
 }
 var HUD_DISABLED_FILE = join(homedir(), ".claude", ".hud_disabled");
@@ -218,13 +229,16 @@ async function main() {
     }
     const branchPart = branchName ? ` ${C.dim}(${C.reset}${C.green}${branchName}${C.reset}${C.dim})${C.reset}` : "";
     parts.push(`${C.cyan}${shortenCwd(cwd)}${C.reset}${branchPart}`);
-    const cache = loadHudCache();
+    const sl = stdin.rate_limits;
+    const slFive = normalizeStdinLimit(sl?.five_hour);
+    const slSeven = normalizeStdinLimit(sl?.seven_day);
+    const cache = slFive && slSeven ? null : loadHudCache();
     const limitParts = [];
-    limitParts.push(renderLimit("5h", cache?.five_hour));
-    limitParts.push(renderLimit("wk", cache?.seven_day));
-    const staleMinutes = cache?._ts ? (Date.now() - cache._ts) / 6e4 : Infinity;
-    if (cache?._ok === false && staleMinutes > 10) {
-      limitParts.push(`${C.red}auth?${C.reset}`);
+    limitParts.push(renderLimit("5h", slFive ?? cache?.five_hour));
+    limitParts.push(renderLimit("wk", slSeven ?? cache?.seven_day));
+    if (cache && cache._ok === false) {
+      const staleMinutes = cache._ts ? (Date.now() - cache._ts) / 6e4 : Infinity;
+      if (staleMinutes > 10) limitParts.push(`${C.red}auth?${C.reset}`);
     }
     if (limitParts.length > 0) {
       parts.push(limitParts.join(" "));

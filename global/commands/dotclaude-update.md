@@ -243,7 +243,7 @@ Hook이 글로벌 경로(`~/.claude/scripts/`, `~/.claude/dist/`)를 참조하�
 ```bash
 GLOBAL_SRC="$DOTCLAUDE_TMP/global"
 
-# 글로벌 scripts — messenger.sh, context-monitor.mjs 등
+# 글로벌 scripts — messenger.sh 등
 mkdir -p ~/.claude/scripts
 cp "$GLOBAL_SRC"/scripts/*.sh ~/.claude/scripts/
 cp "$GLOBAL_SRC"/scripts/*.mjs ~/.claude/scripts/ 2>/dev/null || true
@@ -457,14 +457,14 @@ rm -rf "$DOTCLAUDE_TMP"
 - agents/ (시스템 7개 + 프로젝트 고유 N개 보존)
 - dist/hooks/bridge.js, dist/hud/
 - commands/ (시스템 8개 + 프로젝트 고유 N개 보존)
-- scripts/ (messenger.sh, context-monitor.mjs)
+- scripts/ (messenger.sh)
 - db/ (init.sql, helper.sh — context.db 유지)
 - settings.json (시스템 hooks + 프로젝트 고유 설정 머지)
 - {DOC_ROOT}/claude/ (ref-docs 4개)
 - CLAUDE.md (PROJECT 보존, ref-docs 경로 치환)
 
 글로벌 (~/.claude/):
-- scripts/ (messenger.sh, context-monitor.mjs)
+- scripts/ (messenger.sh)
 - commands/ (dotclaude-init, dotclaude-update)
 - CLAUDE.md
 - dist/ (bridge.js, statusline.js, fetcher.js)

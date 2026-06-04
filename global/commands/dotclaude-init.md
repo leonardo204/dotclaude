@@ -366,7 +366,7 @@ rm -rf "$DOTCLAUDE_TMP"
 - .claude/db/ (Context DB + Helper CLI)
 - .claude/dist/hooks/bridge.js (Hook 브릿지)
 - .claude/dist/hud/ (HUD statusline)
-- .claude/scripts/ (messenger.sh, context-monitor.mjs)
+- .claude/scripts/ (messenger.sh)
 - .claude/commands/ (8개 커스텀 명령어)
 - .claude/settings.json (Hook 등록 + HUD)
 - {DOC_ROOT}/claude/ (ref-docs 4개 — context-db, context-monitor, conventions, setup)
