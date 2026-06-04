@@ -59,6 +59,7 @@
 | `project-local/scripts/messenger.sh` | → `global/scripts/` + `.claude/scripts/` + `~/.claude/scripts/` |
 | `project-local/db/*` (init.sql, helper.sh) | → `.claude/db/` (글로벌 db는 미배포) |
 | `project-local/src/*.ts` | → `npm run build` → dist 3곳(`project-local`·`.claude`·`~/.claude`) |
+| `project-local/workflows/*.js` | → `.claude/workflows/` (init/update가 복사) |
 | `install.sh` | `global/` 디렉토리 구조와 복사 대상 일치 확인 |
 | `uninstall.sh` | 삭제 대상 파일 목록이 `install.sh`가 설치하는 파일과 일치 확인 |
 | `CLAUDE.md` (any) | → `README.md` 관련 섹션 업데이트 |

@@ -73,6 +73,8 @@ cd dotclaude && bash install.sh
 
 "로그인 기능 추가해줘"처럼 규모 있는 요청을 받으면 에이전트들이 팀으로 자동 협업합니다.
 
+> **대규모·재현이 필요할 때**: 이 파이프라인을 `.claude/workflows/dotclaude-implement.js`(Opus 4.8 Workflow)로 결정적 실행할 수 있습니다. `agentType`으로 동일한 7개 에이전트를 오케스트레이션하며, 비용이 크므로 명시적 opt-in(대규모 작업·`ultracode`)에만 사용합니다. 일상 작업의 기본은 위 수동 파이프라인입니다.
+
 ```mermaid
 flowchart LR
     User([사용자 요청]) --> P[planner<br/>계획 수립]

@@ -50,7 +50,7 @@ Agent B: helper.sh agent-context <key> → DB에서 조회
 
 ## 커스텀 에이전트
 
-호출 방법: `subagent_type: "general-purpose"`로 Agent 생성 후, 프롬프트 첫 줄에 `.claude/agents/<name>.md`를 Read하여 지침 포함. `subagent_type`에 커스텀 이름 직접 지정하면 에러.
+호출 방법: `subagent_type`에 에이전트명을 **직접 지정**한다. `.claude/agents/*.md`는 네이티브 subagent로 자동 등록되므로 planner/architect/ralph 등을 그대로 호출할 수 있다 (Opus 4.8 Claude Code). Workflow의 `agent(prompt, {agentType})`도 동일 레지스트리를 사용한다.
 
 | 에이전트 | 역할 | 모델 | effort | 수정 권한 |
 |----------|------|:----:|:----:|:---------:|
@@ -65,11 +65,10 @@ Agent B: helper.sh agent-context <key> → DB에서 조회
 호출 예시:
 
 ```
-Agent(subagent_type: "general-purpose", prompt: "
-.claude/agents/ralph.md의 지침을 따라 작업하라.
-[태스크 내용...]
-")
+Agent(subagent_type: "ralph", prompt: "[태스크 내용...]")
 ```
+
+> 레거시: 과거 `general-purpose` + `.md` Read 우회는 더 이상 불필요(Opus 4.8). 네이티브 직접 호출을 사용한다. 프롬프트에 태스크가 없으면 에이전트가 DB(`agent-task`)에서 조회한다.
 
 ## 구현 파이프라인
 
@@ -90,6 +89,35 @@ Agent(subagent_type: "general-purpose", prompt: "
 | 단순 수정/버그픽스 | "이 에러 고쳐줘" | 직접 처리 또는 ralph 단독 |
 
 판단 기준: 계획+설계가 필요한 규모인가? → Yes면 파이프라인, No면 직접/ralph
+
+## Workflow (대규모 결정적 오케스트레이션)
+
+Workflow는 멀티에이전트 위임을 **코드로 결정화**한 상위 옵션이다. 우리 7개 에이전트는 네이티브 등록되어 `agent(prompt, {agentType: 'ralph'})`로 그대로 호출된다. 위임 자체를 버리는 게 아니라, "메인은 판단+위임" 원칙 위에서 위임을 **재현 가능한 스크립트**로 굳히는 것이다.
+
+### 수동 위임 vs Workflow
+
+| 상황 | 선택 |
+|------|------|
+| 소규모·일상 구현 | 수동 위임 (기본·가벼움) |
+| 대규모(수십 파일·감사·마이그레이션)·재현 필요 | Workflow (opt-in) |
+| 병렬 검증·다관점 투표·adversarial 리뷰 | Workflow (`parallel` + `schema`) |
+
+### 발동 (명시적 opt-in 필수)
+
+Workflow는 수십 에이전트를 spawn → 비용이 크다. **사용자가 "workflow"/"ultracode"를 명시하거나 대규모 작업을 요청할 때만** 발동한다. 일상 작업에 자동 발동 금지 — 기본은 수동 파이프라인.
+
+### 번들 workflow
+
+- `.claude/workflows/dotclaude-implement.js` — 구현 파이프라인(planner→architect→ralph+test-engineer→verifier→reviewer)을 결정적 스크립트로 표현. `agentType`으로 7 에이전트를 pipeline/parallel 오케스트레이션 + `schema` 판정.
+- 실행: `Workflow(scriptPath: ".claude/workflows/dotclaude-implement.js", args: {request: "..."})`
+
+### DB 연결 (세션 간 연속성과 결합)
+
+Workflow 스크립트는 파일시스템/Bash 접근이 없다(`agent()`만 가능). 따라서 Context DB 기록은:
+- (a) 마지막 phase에 ralph로 `bash .claude/db/helper.sh decision-add/commit-log` 실행을 위임, 또는
+- (b) workflow 반환값을 메인이 받아 `helper.sh`로 DB 기록.
+
+→ Workflow는 세션 **내** 조율, Context DB는 세션 **간** 영속 — 상보적으로 결합한다.
 
 ## 모델·effort 배정 원칙 (Opus 4.8 기준)
 

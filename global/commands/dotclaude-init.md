@@ -135,7 +135,7 @@ cat "$SRC/settings.json"
 ### 2단계: 디렉토리 구조 생성
 
 ```bash
-mkdir -p .claude/agents .claude/db .claude/dist/hooks .claude/dist/hud .claude/commands .claude/scripts
+mkdir -p .claude/agents .claude/db .claude/dist/hooks .claude/dist/hud .claude/commands .claude/scripts .claude/workflows
 ```
 
 ### 3단계: 파일 복사 (project-local → .claude/)
@@ -155,6 +155,9 @@ cp -r "$SRC"/dist/hooks/* .claude/dist/hooks/
 cp -r "$SRC"/dist/hud/* .claude/dist/hud/
 # Commands (8개)
 cp "$SRC"/commands/*.md .claude/commands/
+
+# Workflows — 구현 파이프라인 등 (대규모·opt-in)
+cp "$SRC"/workflows/*.js .claude/workflows/ 2>/dev/null || true
 
 # Scripts — messenger 등
 cp "$SRC"/scripts/*.sh .claude/scripts/

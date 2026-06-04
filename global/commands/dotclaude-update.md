@@ -206,7 +206,7 @@ cat "$SRC/settings.json"
 사용자 승인 후 실행.
 
 ```bash
-mkdir -p .claude/agents .claude/db .claude/dist/hooks .claude/dist/hud .claude/commands
+mkdir -p .claude/agents .claude/db .claude/dist/hooks .claude/dist/hud .claude/commands .claude/workflows
 
 # 에이전트 — 클린 교체
 cp "$SRC"/agents/*.md .claude/agents/
@@ -220,6 +220,9 @@ cp -r "$SRC"/dist/hooks/* .claude/dist/hooks/
 cp -r "$SRC"/dist/hud/* .claude/dist/hud/
 # Commands — 클린 교체
 cp "$SRC"/commands/*.md .claude/commands/
+
+# Workflows — 클린 교체 (구현 파이프라인 등)
+cp "$SRC"/workflows/*.js .claude/workflows/ 2>/dev/null || true
 
 # Scripts — messenger 등
 mkdir -p .claude/scripts
