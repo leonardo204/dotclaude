@@ -72,6 +72,27 @@ SQLite context 분석 → 자동화 가능한 패턴 발견 → skill/command/ho
    ORDER BY co_edit_count DESC LIMIT 10;
    ```
 
+   h. 위험 파일 (편집 빈도 × 에러 빈도 — 리팩터/테스트 우선순위):
+   ```sql
+   SELECT t.file_path,
+     COUNT(*) AS edits,
+     (SELECT COUNT(*) FROM errors e WHERE e.file_path = t.file_path) AS errors
+   FROM tool_usage t WHERE t.tool_name='Edit'
+   GROUP BY t.file_path
+   HAVING errors > 0
+   ORDER BY edits * (1 + errors) DESC LIMIT 10;
+   ```
+
+   i. 반복 프롬프트 (자산화 후보 — 동일 content_hash 반복 = 같은 요청 반복):
+   ```sql
+   SELECT content_hash, COUNT(*) AS freq,
+     GROUP_CONCAT(DISTINCT keyword_tags) AS tags
+   FROM prompts
+   GROUP BY content_hash
+   HAVING freq >= 3
+   ORDER BY freq DESC LIMIT 10;
+   ```
+
 3. 패턴 해석 및 제안 생성:
 
    | 발견 패턴 | 제안 유형 | 제안 내용 |
@@ -82,6 +103,8 @@ SQLite context 분석 → 자동화 가능한 패턴 발견 → skill/command/ho
    | 커밋 전 항상 같은 명령 실행 | Hook | PreToolUse에 자동화 |
    | 특정 요일/시간 집중 작업 | Context | 작업 패턴 인사이트 |
    | 세션 시작마다 같은 질문 | Hook | SessionStart에 자동 답변 |
+   | 편집多 + 에러多 파일 (위험 파일) | Command/Test | 리팩터 또는 테스트 보강 우선순위 |
+   | 동일 프롬프트 반복 (freq≥3) | Command/Skill | 반복 요청을 slash command/skill로 자산화 |
 
 4. 결과를 사용자에게 보고:
    ```
