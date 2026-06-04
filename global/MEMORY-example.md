@@ -10,7 +10,7 @@
 
 ## 문서 구조 (2026-02-28 리팩토링)
 - `CLAUDE.md` (~100줄): 프로젝트 요약 + 핵심 규칙 + 상세/UI 시나리오 문서 링크
-- `Ref-docs/claude/`: 8개 상세 문서 (features, design-system, conventions 등)
+- `ref-docs/claude/`: 8개 상세 문서 (features, design-system, conventions 등)
 - `Ref-Concepts/ui-scenarios/`: UI 시나리오 명세 (20+ 파일, 탭별 분리)
 - UI 변경 시 반드시 해당 시나리오 문서도 함께 업데이트 (CLAUDE.md에 명시됨)
 
