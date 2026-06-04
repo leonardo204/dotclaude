@@ -366,11 +366,11 @@ function countSubagents(sessionId) {
 // ── Context % rendering ──
 function renderContext(percent) {
   const color =
-    percent >= 80 ? C.red : percent >= 60 ? C.yellow : C.green;
+    percent >= 85 ? C.red : percent >= 70 ? C.yellow : C.green;
   const suffix =
-    percent >= 85
+    percent >= 90
       ? " CRITICAL"
-      : percent >= 75
+      : percent >= 80
         ? " COMPRESS?"
         : "";
   return `ctx:${color}${percent}%${suffix}${C.reset}`;

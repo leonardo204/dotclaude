@@ -114,11 +114,11 @@ bash .claude/db/helper.sh live-clear                # 전체 삭제
 | 리밋 (5h/wk) | < 70% | 초록 |
 | 리밋 (5h/wk) | 70-90% | 노랑 |
 | 리밋 (5h/wk) | ≥ 90% | 빨강 |
-| ctx% | < 60% | 초록 |
-| ctx% | 60-80% | 노랑 |
-| ctx% | ≥ 80% | 빨강 |
-| ctx% | ≥ 85% | + CRITICAL |
-| ctx% | ≥ 75% | + COMPRESS? |
+| ctx% | < 70% | 초록 |
+| ctx% | 70-85% | 노랑 |
+| ctx% | ≥ 85% | 빨강 |
+| ctx% | ≥ 90% | + CRITICAL |
+| ctx% | ≥ 80% | + COMPRESS? |
 
 ## statusLine 설정 우선순위
 
