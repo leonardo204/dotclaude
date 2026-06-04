@@ -2,6 +2,7 @@
 name: test-engineer
 description: "테스트 전략 수립 + 테스트 코드 작성. TRIGGER: 테스트 필요, TDD 요청"
 model: sonnet
+effort: medium
 tools: Read, Edit, Write, Glob, Grep, Bash
 color: green
 ---

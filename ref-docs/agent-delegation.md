@@ -52,15 +52,15 @@ Agent B: helper.sh agent-context <key> → DB에서 조회
 
 호출 방법: `subagent_type: "general-purpose"`로 Agent 생성 후, 프롬프트 첫 줄에 `.claude/agents/<name>.md`를 Read하여 지침 포함. `subagent_type`에 커스텀 이름 직접 지정하면 에러.
 
-| 에이전트 | 역할 | 모델 | 수정 권한 |
-|----------|------|:----:|:---------:|
-| planner | 요청 분석 → 태스크 분해 + 수용 기준 정의 | opus | ❌ |
-| architect | 설계/구현 검토 + 아키텍처 타당성 검증 | opus | ❌ |
-| ralph | 끈질긴 구현 — 완료+검증될 때까지 절대 중단 안 함 | sonnet | ✅ |
-| verifier | 빌드/테스트/타입체크 증거 기반 검증 | haiku | ❌ |
-| reviewer | 코드 리뷰 — 보안/정확성/품질 | opus | ❌ |
-| debugger | 버그/에러 근본 원인 진단 | opus | ❌ |
-| test-engineer | 테스트 전략 수립 + 테스트 코드 작성 | sonnet | ✅ |
+| 에이전트 | 역할 | 모델 | effort | 수정 권한 |
+|----------|------|:----:|:----:|:---------:|
+| planner | 요청 분석 → 태스크 분해 + 수용 기준 정의 | opus | high | ❌ |
+| architect | 설계/구현 검토 + 아키텍처 타당성 검증 | opus | high | ❌ |
+| ralph | 끈질긴 구현 — 완료+검증될 때까지 절대 중단 안 함 | opus | xhigh | ✅ |
+| verifier | 빌드/테스트/타입체크 증거 기반 검증 | sonnet | low | ❌ |
+| reviewer | 코드 리뷰 — 보안/정확성/품질 | opus | high | ❌ |
+| debugger | 버그/에러 근본 원인 진단 | opus | high | ❌ |
+| test-engineer | 테스트 전략 수립 + 테스트 코드 작성 | sonnet | medium | ✅ |
 
 호출 예시:
 
@@ -91,18 +91,28 @@ Agent(subagent_type: "general-purpose", prompt: "
 
 판단 기준: 계획+설계가 필요한 규모인가? → Yes면 파이프라인, No면 직접/ralph
 
-## 모델 배정 원칙
+## 모델·effort 배정 원칙 (Opus 4.8 기준)
+
+모델은 추론 깊이·비용으로, effort는 노력 수준(토큰 소비)으로 — 두 축을 조합해 배정한다.
 
 | 모델 | 적합한 역할 | 이유 |
 |------|------------|------|
-| opus | 계획, 설계 검토, 코드 리뷰, 근본 원인 진단 | 깊은 추론, 적응형 사고, Read-only 에이전트에 최적 |
-| sonnet | 코드 구현, 테스트 작성 | 높은 도구 호출 빈도(Edit/Write/Bash) + 반복 실행에 비용 효율적 |
-| haiku | 단순 실행+판정 | 빌드/테스트 실행 후 PASS/FAIL 판정만 하므로 최소 비용 |
+| opus | 계획, 설계 검토, 코드 리뷰, 근본 원인 진단, long-horizon 구현 | 깊은 추론, 적응형 사고. 4.8의 long-context·도구 트리거 개선으로 장기 구현(ralph)에도 적합 |
+| sonnet | 테스트 작성, 빌드/테스트 검증 | 도구 호출 빈도가 높거나 단순한 실행에 비용 효율적. effort로 노력 수준 제어 |
+
+| effort | 적합한 역할 | 배정 에이전트 |
+|--------|------------|--------------|
+| xhigh | 장기 에이전틱 구현 (공식 권장: 코딩/에이전틱 시작점) | ralph |
+| high | 깊은 추론·판단 (API 기본값) | planner, architect, reviewer, debugger |
+| medium | 균형형 실행 | test-engineer |
+| low | 단순 실행+판정 | verifier |
 
 배정 판단 기준:
 - **추론 깊이가 핵심**이면 opus — 하나의 정확한 판단이 중요한 역할
-- **도구 호출 빈도가 높으면** sonnet — 반복적 Edit/Write/Bash 실행이 많은 역할
-- **단순 실행+판정**이면 haiku — 명령 실행 후 결과 보고만 하는 역할
+- **장기 구현·에이전틱**이면 opus + xhigh — 4.8 long-horizon 개선의 수혜 (fewer compactions, better tool triggering)
+- **도구 호출 빈도가 높거나 단순**하면 sonnet — effort로 비용을 조절
+- **effort는 노력 수준 제어**: 분석 `high`, 장기 구현 `xhigh`, 균형 `medium`, 단순 판정 `low`
+- ⚠️ **haiku는 effort 파라미터 미지원** — 노력 제어가 필요하면 sonnet + low로 배정 (verifier가 이 경우)
 
 ## 에이전트 프롬프트 공통 원칙
 

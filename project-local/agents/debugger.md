@@ -2,6 +2,7 @@
 name: debugger
 description: "버그/에러 근본 원인 진단. TRIGGER: 빌드 실패, 테스트 실패, 런타임 에러"
 model: opus
+effort: high
 tools: Read, Glob, Grep, Bash
 color: yellow
 ---
