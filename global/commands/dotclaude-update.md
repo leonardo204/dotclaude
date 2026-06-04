@@ -206,7 +206,7 @@ cat "$SRC/settings.json"
 사용자 승인 후 실행.
 
 ```bash
-mkdir -p .claude/agents .claude/db .claude/dist/hooks .claude/dist/hud .claude/commands .claude/workflows
+mkdir -p .claude/agents .claude/db .claude/dist/hooks .claude/dist/hud .claude/commands .claude/workflows .claude/skills
 
 # 에이전트 — 클린 교체
 cp "$SRC"/agents/*.md .claude/agents/
@@ -223,6 +223,9 @@ cp "$SRC"/commands/*.md .claude/commands/
 
 # Workflows — 클린 교체 (구현 파이프라인 등)
 cp "$SRC"/workflows/*.js .claude/workflows/ 2>/dev/null || true
+
+# Skills — 클린 교체 (spec-guard 등)
+cp -r "$SRC"/skills/* .claude/skills/ 2>/dev/null || true
 
 # Scripts — messenger 등
 mkdir -p .claude/scripts
@@ -345,11 +348,28 @@ dotclaude repo의 `ref-docs/` 에서 감지된 문서 폴더의 `claude/` 서브
 
 ```bash
 DOC_ROOT="{감지/선택된 폴더}"  # 예: docs, Ref-docs 등
-mkdir -p "$DOC_ROOT/claude"
-cp "$DOTCLAUDE_TMP/ref-docs/context-db.md" "$DOC_ROOT/claude/"
-cp "$DOTCLAUDE_TMP/ref-docs/context-monitor.md" "$DOC_ROOT/claude/"
-cp "$DOTCLAUDE_TMP/ref-docs/conventions.md" "$DOC_ROOT/claude/"
-cp "$DOTCLAUDE_TMP/ref-docs/setup.md" "$DOC_ROOT/claude/"
+mkdir -p "$DOC_ROOT/claude" "$DOC_ROOT/specs"
+
+# 하니스 문서 전체 복사 (읽기 전용). cp가 덮어쓰며, 기존 사용자에게 누락된
+# 문서(agent-delegation/hooks/sdd 등)를 자동 보충한다 — 멱등 마이그레이션.
+cp "$DOTCLAUDE_TMP/ref-docs/"*.md "$DOC_ROOT/claude/"
+
+# claude/ 소유권 안내 (없을 때만 — 기존 사용자도 자연 생성)
+[ -f "$DOC_ROOT/claude/_README.md" ] || cat > "$DOC_ROOT/claude/_README.md" <<'HARNESS_EOF'
+# 🔒 dotclaude 하니스 문서 (자동 생성 · 수정 금지)
+
+이 폴더는 dotclaude 하니스가 소유합니다. `dotclaude-update`가 덮어쓰므로 **수정하지 마세요**.
+프로젝트 스펙/문서는 `../specs/`(SDD)나 상위 폴더에 작성합니다. → 가이드: `sdd.md`
+HARNESS_EOF
+
+# specs/ 스캐폴드 (없을 때만)
+[ -f "$DOC_ROOT/specs/README.md" ] || cat > "$DOC_ROOT/specs/README.md" <<'SPECS_EOF'
+# specs — 프로젝트 스펙 문서 (SDD)
+
+- 가이드라인: `../claude/sdd.md`
+- 정합성 분석: `/spec-guard` (영향도·중복·범위·누락·버전)
+- 분류: `design/` `impl/` `interface/` `test/`
+SPECS_EOF
 ```
 
 ### 8단계: CLAUDE.md 재구성
@@ -395,9 +415,8 @@ cp "$SRC/CLAUDE.md" CLAUDE.md
 `$DOC_ROOT`가 `Ref-docs`가 아닌 경우, CLAUDE.md 내의 ref-docs 경로를 치환:
 
 ```bash
-if [ "$DOC_ROOT" != "Ref-docs" ]; then
-    sed -i '' "s|Ref-docs/claude/|${DOC_ROOT}/claude/|g" CLAUDE.md
-fi
+# ref-docs/(구 템플릿)와 레거시 Ref-docs/claude/ 참조를 현재 위치로 정규화 (멱등)
+sed -i '' "s|ref-docs/|${DOC_ROOT}/claude/|g; s|Ref-docs/claude/|${DOC_ROOT}/claude/|g" CLAUDE.md
 ```
 
 이렇게 하면 CLAUDE.md 내의 모든 참조 경로가 실제 문서 위치와 일치하게 된다:
