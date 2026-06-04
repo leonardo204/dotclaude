@@ -9,6 +9,16 @@ INIT_SQL="$PROJECT_ROOT/.claude/db/init.sql"
 # DB 없으면 초기화
 [ ! -f "$DB_PATH" ] && sqlite3 "$DB_PATH" < "$INIT_SQL"
 
+# 경량 멱등 마이그레이션 (schema 1.1 → 1.2): access_count 컬럼 존재를 완료 플래그로 사용.
+# 미존재 시에만 1회 ALTER + init.sql 재실행(FTS/트리거 멱등 보강) + FTS 백필.
+_migrated=$(sqlite3 "$DB_PATH" "SELECT COUNT(*) FROM pragma_table_info('context') WHERE name='access_count';" 2>/dev/null)
+if [ "$_migrated" = "0" ]; then
+    sqlite3 "$DB_PATH" "ALTER TABLE context ADD COLUMN last_access_ts TEXT;" 2>/dev/null
+    sqlite3 "$DB_PATH" "ALTER TABLE context ADD COLUMN access_count INTEGER NOT NULL DEFAULT 0;" 2>/dev/null
+    sqlite3 "$DB_PATH" < "$INIT_SQL" 2>/dev/null
+    sqlite3 "$DB_PATH" "INSERT INTO context_fts(context_fts) VALUES('rebuild');" 2>/dev/null
+fi
+
 CMD="$1"
 shift
 
@@ -24,6 +34,8 @@ case "$CMD" in
     # === 컨텍스트 ===
     ctx-get)
         # helper.sh ctx-get <key>
+        # C1: 회상 시 access_count/last_access_ts 갱신 (decay 재랭킹 신호)
+        sqlite3 "$DB_PATH" "UPDATE context SET access_count=access_count+1, last_access_ts=datetime('now','localtime') WHERE key='$1';" 2>/dev/null
         sqlite3 "$DB_PATH" "SELECT value FROM context WHERE key='$1' ORDER BY updated_at DESC LIMIT 1;"
         ;;
     ctx-set)
@@ -32,12 +44,18 @@ case "$CMD" in
         ;;
     ctx-search)
         # helper.sh ctx-search <keyword>
-        sqlite3 -header -column "$DB_PATH" "SELECT key, value, category, updated_at FROM context WHERE key LIKE '%$1%' OR value LIKE '%$1%' ORDER BY updated_at DESC LIMIT 10;"
+        # C2: FTS5 전문검색 우선, 실패/무결과 시 LIKE fallback
+        _res=$(sqlite3 -header -column "$DB_PATH" "SELECT c.key, c.value, c.category, c.updated_at FROM context_fts f JOIN context c ON c.id=f.rowid WHERE context_fts MATCH '$1' ORDER BY rank LIMIT 10;" 2>/dev/null)
+        if [ -z "$_res" ]; then
+            _res=$(sqlite3 -header -column "$DB_PATH" "SELECT key, value, category, updated_at FROM context WHERE key LIKE '%$1%' OR value LIKE '%$1%' ORDER BY updated_at DESC LIMIT 10;")
+        fi
+        printf '%s\n' "$_res"
         ;;
     ctx-list)
         # helper.sh ctx-list [category]
         if [ -n "$1" ]; then
-            sqlite3 -header -column "$DB_PATH" "SELECT key, substr(value,1,80) as value, updated_at FROM context WHERE category='$1' ORDER BY updated_at DESC;"
+            # C1: decay 근사 — 자주 회상한 항목 우선, 그다음 최신순
+            sqlite3 -header -column "$DB_PATH" "SELECT key, substr(value,1,80) as value, updated_at FROM context WHERE category='$1' ORDER BY access_count DESC, updated_at DESC;"
         else
             sqlite3 -header -column "$DB_PATH" "SELECT category, COUNT(*) as count FROM context GROUP BY category ORDER BY count DESC;"
         fi

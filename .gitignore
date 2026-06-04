@@ -6,6 +6,8 @@ node_modules/
 
 # Claude Code runtime
 .claude/db/context.db
+.claude/db/context.db-wal
+.claude/db/context.db-shm
 .claude/.ctx_state
 .claude/.backup-*
 .claude/.ralph_state

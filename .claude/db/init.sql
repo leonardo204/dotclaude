@@ -20,7 +20,9 @@ CREATE TABLE IF NOT EXISTS context (
     value TEXT NOT NULL,
     category TEXT NOT NULL DEFAULT 'general',  -- architecture, decision, feature, bug, ...
     created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
-    updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+    updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    last_access_ts TEXT,                          -- C1: decay 재랭킹용 마지막 회상 시각
+    access_count INTEGER NOT NULL DEFAULT 0        -- C1: decay 재랭킹용 회상 횟수
 );
 CREATE INDEX IF NOT EXISTS idx_context_category ON context(category);
 CREATE INDEX IF NOT EXISTS idx_context_key ON context(key);
@@ -101,10 +103,27 @@ CREATE TABLE IF NOT EXISTS live_context (
     updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
 );
 
+-- C2: context 전문검색 (FTS5). external-content 패턴 — context 테이블과 트리거로 동기화.
+-- FTS5 미지원 빌드에서는 이 블록이 실패할 수 있으므로, 코드(db.ts/helper.sh)에서
+-- try-catch 후 LIKE fallback 하도록 한다. (sqlite3 CLI/macOS는 기본 FTS5 포함)
+CREATE VIRTUAL TABLE IF NOT EXISTS context_fts USING fts5(
+    key, value, content='context', content_rowid='id'
+);
+CREATE TRIGGER IF NOT EXISTS context_fts_ai AFTER INSERT ON context BEGIN
+    INSERT INTO context_fts(rowid, key, value) VALUES (new.id, new.key, new.value);
+END;
+CREATE TRIGGER IF NOT EXISTS context_fts_ad AFTER DELETE ON context BEGIN
+    INSERT INTO context_fts(context_fts, rowid, key, value) VALUES ('delete', old.id, old.key, old.value);
+END;
+CREATE TRIGGER IF NOT EXISTS context_fts_au AFTER UPDATE ON context BEGIN
+    INSERT INTO context_fts(context_fts, rowid, key, value) VALUES ('delete', old.id, old.key, old.value);
+    INSERT INTO context_fts(rowid, key, value) VALUES (new.id, new.key, new.value);
+END;
+
 -- DB 메타 정보
 CREATE TABLE IF NOT EXISTS db_meta (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
-INSERT OR REPLACE INTO db_meta (key, value) VALUES ('schema_version', '1.1');
+INSERT OR REPLACE INTO db_meta (key, value) VALUES ('schema_version', '1.2');
 INSERT OR REPLACE INTO db_meta (key, value) VALUES ('created_at', datetime('now', 'localtime'));
