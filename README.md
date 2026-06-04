@@ -286,7 +286,7 @@ Claude Code 하단에 현재 사용량과 환경 정보를 실시간으로 표�
 | 맥락% | 현재 대화 컨텍스트 사용률 |
 | 활성 에이전트 | 현재 실행 중인 서브에이전트 수 |
 
-Rate limit 정보는 백그라운드에서 주기적으로 갱신되어 API 블로킹이 없습니다. HUD 표시 자체는 로컬 캐시만 읽으므로 응답 속도에 영향을 주지 않습니다.
+HUD는 Claude Code가 statusline에 직접 주는 stdin 데이터(rate limit·컨텍스트·모델 등)를 읽어 즉시 렌더링하므로 API 블로킹이나 응답 지연이 없습니다. (rate limit 데이터의 정확한 출처는 아래 참고)
 
 **HUD 설치 범위**: `install.sh` 실행 시 Global(모든 프로젝트), Project(dotclaude-init한 프로젝트만), Skip(미설치) 중 선택할 수 있습니다. 설치 후에도 `/dotclaude-statusline` 명령으로 언제든 on/off 전환이 가능합니다.
 
