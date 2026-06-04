@@ -60,6 +60,6 @@ updated: YYYY-MM-DD
 - 문서를 추가/수정할 때 `related`로 연결된 문서들이 영향받는지 확인한다.
 - **`spec-guard` skill**이 `specs/` 전체의 frontmatter 그래프를 분석해
   영향도 맵·중복/관련도·범위 적합성(over/under)·누락·문서 개수·버전 정합을 리포트한다 (read-only, 권고만).
-- 발동: 스펙 문서를 작성/수정/검토할 때, 또는 `/spec-guard` 명시 호출.
+- 발동: 스펙 문서를 작성/수정/검토할 때뿐 아니라, **계획·설계 리포트를 md로 저장한 직후**, **외부에서 작성된 스펙을 `specs/`·`ref-docs`에 복사·추가할 때**(저장·복사 행위 자체가 스펙 작성), 또는 `/spec-guard` 명시 호출. 외부 복사본은 frontmatter가 없는 경우가 많으니 규약에 맞춰 보강을 먼저 권고받는다.
 
 → 관련: [Agent Delegation](agent-delegation.md) (구현 파이프라인은 승인된 스펙을 입력으로 받는다)
