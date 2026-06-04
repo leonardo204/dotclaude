@@ -32,7 +32,33 @@ export class ContextDB {
     const sqlPath =
       initSqlPath ?? join(__dirname, '../../db/init.sql');
     const sql = readFileSync(sqlPath, 'utf8');
-    this.db.exec(sql);
+    // FTS5 미지원 빌드 등에서 일부 statement가 실패해도 핵심 테이블은 생성되도록 보호
+    try {
+      this.db.exec(sql);
+    } catch {
+      // 부분 실패 — 아래 멱등 마이그레이션과 코드 fallback에 위임
+    }
+    // 멱등 마이그레이션 (schema 1.1 → 1.2): 기존 DB에 누락된 decay 컬럼 보강
+    try {
+      const col = this.db
+        .prepare(
+          "SELECT COUNT(*) AS n FROM pragma_table_info('context') WHERE name='access_count'"
+        )
+        .get() as { n: number };
+      if (col.n === 0) {
+        this.db.exec('ALTER TABLE context ADD COLUMN last_access_ts TEXT');
+        this.db.exec(
+          'ALTER TABLE context ADD COLUMN access_count INTEGER NOT NULL DEFAULT 0'
+        );
+        try {
+          this.db.exec("INSERT INTO context_fts(context_fts) VALUES('rebuild')");
+        } catch {
+          // FTS5 미지원 — LIKE fallback 사용
+        }
+      }
+    } catch {
+      // 무시
+    }
   }
 
   // === 세션 ===
@@ -132,6 +158,16 @@ export class ContextDB {
   // === Context (key-value store) ===
 
   ctxGet(key: string): string | null {
+    // C1: 회상 시 decay 신호(access_count/last_access_ts) 갱신
+    try {
+      this.db
+        .prepare(
+          "UPDATE context SET access_count = access_count + 1, last_access_ts = datetime('now','localtime') WHERE key = ?"
+        )
+        .run(key);
+    } catch {
+      // 컬럼 미마이그레이션 시 무시
+    }
     const stmt = this.db.prepare(
       'SELECT value FROM context WHERE key = ? ORDER BY updated_at DESC LIMIT 1'
     );
@@ -147,14 +183,15 @@ export class ContextDB {
   }
 
   ctxList(category?: string): ContextEntry[] {
+    // C1: decay 근사 — 자주 회상한 항목 우선, 그다음 최신순
     if (category) {
       const stmt = this.db.prepare(
-        'SELECT * FROM context WHERE category = ? ORDER BY updated_at DESC'
+        'SELECT * FROM context WHERE category = ? ORDER BY access_count DESC, updated_at DESC'
       );
       return stmt.all(category) as unknown as ContextEntry[];
     }
     const stmt = this.db.prepare(
-      'SELECT * FROM context ORDER BY updated_at DESC'
+      'SELECT * FROM context ORDER BY access_count DESC, updated_at DESC'
     );
     return stmt.all() as unknown as ContextEntry[];
   }

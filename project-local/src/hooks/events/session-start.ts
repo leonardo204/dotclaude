@@ -147,6 +147,34 @@ export async function handleSessionStart({ projectRoot, db }: SessionStartInput)
     out.push(`[checkin] Last session: ${lastSessionTime} (${diffHours}h ago - recent)`);
   }
 
+  // === A1: 직전 세션 핸드오프 주입 (세션 간 연속성) ===
+  // live_context 세션스코프 초기화에서 working_files/error_context만 지우므로 유지됨.
+  try {
+    const handoff = db.liveGet('session_handoff');
+    if (handoff) {
+      out.push('');
+      out.push(handoff);
+    }
+  } catch {
+    // 무시
+  }
+
+  // === A2: context 메모리 인덱스 주입 (통째 주입 대신 키 인덱스만; 상세는 on-demand) ===
+  try {
+    const idxRows = db.query(
+      `SELECT category, GROUP_CONCAT(key, ', ') AS keys FROM ` +
+        `(SELECT category, key FROM context ORDER BY access_count DESC, updated_at DESC) ` +
+        `GROUP BY category`
+    ) as Array<{ category: string; keys: string }>;
+    if (idxRows.length > 0) {
+      out.push('');
+      out.push('[memory] context 인덱스 (상세: helper.sh ctx-get <key>):');
+      for (const r of idxRows) out.push(`  [${r.category}] ${r.keys}`);
+    }
+  } catch {
+    // 무시
+  }
+
   // === 커스텀 명령어 안내 ===
   const commandsDir = join(projectRoot, '.claude/commands');
   out.push('');

@@ -64,6 +64,45 @@ export async function handleStopSession({ db }: StopSessionInput): Promise<void>
     // 무시
   }
 
+  // A1: 다음 세션 핸드오프 블록 — 구조화 저장(편집/커밋/결정/미완료 태스크).
+  // SessionStart가 이 블록을 주입해 세션 간 연속성을 확보한다(LLM 요약 아님).
+  try {
+    const parts: string[] = [];
+    const files = db.recentToolFiles(sessionId, 8);
+    if (filesChanged > 0 || files.length > 0) {
+      const fileList = files.join(', ');
+      parts.push(`  - 편집: ${filesChanged} files${fileList ? ` (${fileList})` : ''}`);
+    }
+    const commitRows = db.query(
+      `SELECT message FROM commits WHERE session_id = ${sessionId} ORDER BY id DESC LIMIT 5`
+    ) as Array<{ message: string }>;
+    if (commitRows.length > 0) {
+      const msgs = commitRows.map((r) => r.message.split('\n')[0]).join(' / ');
+      parts.push(`  - 커밋: ${commitRows.length}건 — ${msgs}`);
+    }
+    const decisionRows = db.query(
+      "SELECT description FROM decisions WHERE status='active' ORDER BY id DESC LIMIT 2"
+    ) as Array<{ description: string }>;
+    if (decisionRows.length > 0) {
+      parts.push(`  - 최근 결정: ${decisionRows.map((r) => r.description).join(' / ')}`);
+    }
+    const taskRows = db.query(
+      "SELECT '    - [' || status || '] ' || description AS line FROM tasks WHERE status IN ('pending','in_progress') ORDER BY priority LIMIT 5"
+    ) as Array<{ line: string }>;
+    if (taskRows.length > 0) {
+      parts.push(`  - 미완료 태스크 ${taskRows.length}건:`);
+      for (const r of taskRows) parts.push(r.line);
+    }
+    if (parts.length > 0) {
+      db.liveSet(
+        'session_handoff',
+        `[handoff] 직전 세션 #${sessionId} 요약:\n${parts.join('\n')}`
+      );
+    }
+  } catch {
+    // 무시
+  }
+
   // stdout: 디버그 1줄
   process.stdout.write(`[hook:on-stop] DB 조회: 세션 #${sessionId} 편집 파일 수\n`);
 }

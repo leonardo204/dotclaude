@@ -24,7 +24,26 @@ var ContextDB = class {
   initSchema(initSqlPath) {
     const sqlPath = initSqlPath ?? join(__dirname, "../../db/init.sql");
     const sql = readFileSync(sqlPath, "utf8");
-    this.db.exec(sql);
+    try {
+      this.db.exec(sql);
+    } catch {
+    }
+    try {
+      const col = this.db.prepare(
+        "SELECT COUNT(*) AS n FROM pragma_table_info('context') WHERE name='access_count'"
+      ).get();
+      if (col.n === 0) {
+        this.db.exec("ALTER TABLE context ADD COLUMN last_access_ts TEXT");
+        this.db.exec(
+          "ALTER TABLE context ADD COLUMN access_count INTEGER NOT NULL DEFAULT 0"
+        );
+        try {
+          this.db.exec("INSERT INTO context_fts(context_fts) VALUES('rebuild')");
+        } catch {
+        }
+      }
+    } catch {
+    }
   }
   // === 세션 ===
   /** 새 세션을 삽입하고 생성된 id를 반환한다. */
@@ -108,6 +127,12 @@ var ContextDB = class {
   }
   // === Context (key-value store) ===
   ctxGet(key) {
+    try {
+      this.db.prepare(
+        "UPDATE context SET access_count = access_count + 1, last_access_ts = datetime('now','localtime') WHERE key = ?"
+      ).run(key);
+    } catch {
+    }
     const stmt = this.db.prepare(
       "SELECT value FROM context WHERE key = ? ORDER BY updated_at DESC LIMIT 1"
     );
@@ -123,12 +148,12 @@ var ContextDB = class {
   ctxList(category) {
     if (category) {
       const stmt2 = this.db.prepare(
-        "SELECT * FROM context WHERE category = ? ORDER BY updated_at DESC"
+        "SELECT * FROM context WHERE category = ? ORDER BY access_count DESC, updated_at DESC"
       );
       return stmt2.all(category);
     }
     const stmt = this.db.prepare(
-      "SELECT * FROM context ORDER BY updated_at DESC"
+      "SELECT * FROM context ORDER BY access_count DESC, updated_at DESC"
     );
     return stmt.all();
   }
@@ -415,6 +440,25 @@ async function handleSessionStart({ projectRoot, db }) {
   } else {
     out.push(`[checkin] Last session: ${lastSessionTime} (${diffHours}h ago - recent)`);
   }
+  try {
+    const handoff = db.liveGet("session_handoff");
+    if (handoff) {
+      out.push("");
+      out.push(handoff);
+    }
+  } catch {
+  }
+  try {
+    const idxRows = db.query(
+      `SELECT category, GROUP_CONCAT(key, ', ') AS keys FROM (SELECT category, key FROM context ORDER BY access_count DESC, updated_at DESC) GROUP BY category`
+    );
+    if (idxRows.length > 0) {
+      out.push("");
+      out.push("[memory] context \uC778\uB371\uC2A4 (\uC0C1\uC138: helper.sh ctx-get <key>):");
+      for (const r of idxRows) out.push(`  [${r.category}] ${r.keys}`);
+    }
+  } catch {
+  }
   const commandsDir = join2(projectRoot, ".claude/commands");
   out.push("");
   out.push("[project] Available commands:");
@@ -621,13 +665,9 @@ async function handlePostBash({ db, stdinData }) {
   const errType = classifyError(combined);
   if (!errType) return;
   const errFile = extractFile(combined);
-  try {
-    db.errorLog(errType, errFile || void 0);
-    const errInfo = `${errType}: ${errFile || "unknown"}`;
-    db.liveSet("error_context", errInfo);
-  } catch {
-    // DB write failure is non-fatal — ignore silently
-  }
+  db.errorLog(errType, errFile || void 0);
+  const errInfo = `${errType}: ${errFile || "unknown"}`;
+  db.liveSet("error_context", errInfo);
 }
 
 // src/hooks/events/stop-session.ts
@@ -666,6 +706,42 @@ async function handleStopSession({ db }) {
       const fileList = files.join(", ");
       const summary = filesChanged > 10 ? `${filesChanged} files: ${fileList}, ... +${filesChanged - 10} more` : `${filesChanged} files: ${fileList}`;
       db.liveSet("session_summary", summary);
+    }
+  } catch {
+  }
+  try {
+    const parts = [];
+    const files = db.recentToolFiles(sessionId, 8);
+    if (filesChanged > 0 || files.length > 0) {
+      const fileList = files.join(", ");
+      parts.push(`  - \uD3B8\uC9D1: ${filesChanged} files${fileList ? ` (${fileList})` : ""}`);
+    }
+    const commitRows = db.query(
+      `SELECT message FROM commits WHERE session_id = ${sessionId} ORDER BY id DESC LIMIT 5`
+    );
+    if (commitRows.length > 0) {
+      const msgs = commitRows.map((r) => r.message.split("\n")[0]).join(" / ");
+      parts.push(`  - \uCEE4\uBC0B: ${commitRows.length}\uAC74 \u2014 ${msgs}`);
+    }
+    const decisionRows = db.query(
+      "SELECT description FROM decisions WHERE status='active' ORDER BY id DESC LIMIT 2"
+    );
+    if (decisionRows.length > 0) {
+      parts.push(`  - \uCD5C\uADFC \uACB0\uC815: ${decisionRows.map((r) => r.description).join(" / ")}`);
+    }
+    const taskRows = db.query(
+      "SELECT '    - [' || status || '] ' || description AS line FROM tasks WHERE status IN ('pending','in_progress') ORDER BY priority LIMIT 5"
+    );
+    if (taskRows.length > 0) {
+      parts.push(`  - \uBBF8\uC644\uB8CC \uD0DC\uC2A4\uD06C ${taskRows.length}\uAC74:`);
+      for (const r of taskRows) parts.push(r.line);
+    }
+    if (parts.length > 0) {
+      db.liveSet(
+        "session_handoff",
+        `[handoff] \uC9C1\uC804 \uC138\uC158 #${sessionId} \uC694\uC57D:
+${parts.join("\n")}`
+      );
     }
   } catch {
   }
@@ -788,7 +864,7 @@ async function main() {
         break;
     }
   } finally {
-    try { db.close(); } catch { /* ignore close errors */ }
+    db.close();
   }
 }
 main().catch((err) => {
