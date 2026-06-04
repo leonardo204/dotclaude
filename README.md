@@ -200,6 +200,22 @@ flowchart TD
     Phase2 --> Phase3[Phase 3 — 순차<br/>ralph: 전체 빌드/테스트 검증]
 ```
 
+**시나리오 5: 대규모 작업 → Workflow** — 수십 파일·감사·마이그레이션 (Opus 4.8, opt-in)
+
+위 팀 모드를 **결정적 스크립트**로 굳힌 형태입니다. `agentType`으로 동일한 7개 에이전트를 코드로 오케스트레이션하며, 중간 결과가 메인 대화 컨텍스트를 채우지 않아 대규모 작업에 유리합니다. 번들 워크플로우: `.claude/workflows/dotclaude-implement.js`
+
+```mermaid
+flowchart LR
+    W[Workflow 스크립트] --> P[planner]
+    P --> A[architect]
+    A --> B[ralph + test-engineer 병렬]
+    B --> V[verifier]
+    V --> Rev[reviewer]
+    Rev -.결과 기록.-> DB[Context DB]
+```
+
+> 비용이 크므로 `workflow`/`ultracode` 명시 시에만 발동합니다. 일상 작업의 기본은 위 수동 팀 모드입니다.
+
 #### 단독 에이전트 사용
 
 팀 모드가 아닌 개별 에이전트만 호출되는 경우:
@@ -220,27 +236,33 @@ flowchart TD
 
 ---
 
-### 🛡️ 컨텍스트 보호 (Compaction 대응)
+### 🛡️ 컨텍스트 보호 & 세션 연속성
 
-Claude Code는 대화가 길어지면 이전 내용을 압축(compaction)합니다. 이때 편집 중이던 파일 경로나 직전 에러 정보를 잊어버려 작업이 끊기는 문제가 생깁니다.
+> Opus 4.8의 **1M 컨텍스트**로 compaction(대화 압축) 빈도가 크게 줄었습니다. dotclaude는 Context DB의 무게추를 **"compaction 복구" → "세션 간 연속성 + 메모리 품질"**로 옮겼습니다. (DB 파일은 세션이 바뀌어도 물리적으로 유지됩니다.)
 
-dotclaude는 Hook을 통해 핵심 상태를 자동으로 DB에 기록하고, compaction 이후에도 작업 흐름이 이어지도록 합니다.
+**1. 세션 간 연속성** — 새 대화창이 직전 작업을 즉시 이어받습니다.
 
-**자동 캡처 항목**
+- **핸드오프 주입**: 세션 종료 시 편집 파일·커밋·결정·미완료 태스크를 구조화해 `session_handoff`에 저장 → 다음 세션 시작에 자동 주입.
+- **메모리 인덱스**: 컨텍스트를 통째 주입하지 않고 카테고리별 키 인덱스만 주입(상세는 필요 시 `ctx-get`으로 조회) → 1M이라도 토큰·노이즈 절감.
+
+**2. 메모리 품질** (벡터 DB 없이 SQLite로)
+
+- **Decay 재랭킹**: 자주 회상한 항목을 우선 노출, 오래된 노이즈는 자동 후순위.
+- **FTS5 전문검색**: 키워드 검색 정확도 향상(`ctx-search`).
+
+**3. Compaction 안전망** — 빈도는 줄었지만 여전히 대비합니다.
 
 | 항목 | 캡처 시점 | 내용 |
 |------|-----------|------|
+| `session_handoff` | 세션 종료 시 | 편집·커밋·결정·미완료 태스크 → **다음 세션 주입** |
 | `working_files` | 컨텍스트 70% 도달 시 | 편집 중인 파일 경로 (최대 20개) |
 | `error_context` | 에러 발생 시 | 에러 유형 + 관련 파일 경로 |
-| `session_summary` | 세션 종료 시 | 이번 세션 편집 파일 수 + 목록 |
 | `_rules` | 세션 시작 시 | CLAUDE.md 핵심 지침 |
 | `current_task` | 수동 저장 | 현재 진행 중인 작업 설명 |
 
-**3단계 차등 주입**: 매 턴마다 컨텍스트 사용률을 확인해 상황에 맞게 정보를 주입합니다.
+**3단계 차등 주입**: 매 턴 컨텍스트 사용률에 따라 — 기본(70% 미만, 핸드오프+메모리 인덱스) → 경고(70~90%, working_files·error_context 추가) → 복구(compaction 감지 시 DB에서 전체 상태 복원).
 
-- 기본 (70% 미만): 세션 요약만 표시
-- 경고 (70~90%): working_files, error_context 추가 주입
-- 복구 (compaction 감지): DB에서 전체 상태를 불러와 자동 복구
+> 상세: `ref-docs/context-db.md`의 "1M 컨텍스트 시대 활용" 섹션
 
 ---
 
