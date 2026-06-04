@@ -262,7 +262,7 @@ flowchart LR
 
 **3단계 차등 주입**: 매 턴 컨텍스트 사용률에 따라 — 기본(70% 미만, 핸드오프+메모리 인덱스) → 경고(70~90%, working_files·error_context 추가) → 복구(compaction 감지 시 DB에서 전체 상태 복원).
 
-> 상세: `ref-docs/context-db.md`의 "1M 컨텍스트 시대 활용" 섹션
+> 상세: `claude/context-db.md`의 "1M 컨텍스트 시대 활용" 섹션
 
 ---
 
@@ -370,31 +370,35 @@ Claude Code 작업이 완료되면 **Telegram**으로 알림을 받을 수 있�
 
 CLAUDE.md는 **매 턴 모델에 입력**되므로, 길어지면 응답 속도가 느려집니다. dotclaude는 이를 방지하기 위해 Slim 정책을 적용합니다.
 
-**원칙**: CLAUDE.md는 100줄 이하 유지. 상세 내용은 ref-docs로 분리.
+**원칙**: CLAUDE.md는 100줄 이하 유지. 상세 내용은 하니스 문서(`claude/`)로 분리.
 
 ```mermaid
 graph LR
-    A["📄 CLAUDE.md<br>(100줄 이하)"] -->|상세 참조| B["📚 ref-docs/*.md"]
+    A["📄 CLAUDE.md<br>(100줄 이하)"] -->|상세 참조| B["📚 claude/*.md"]
 
-    A ~~~ A1["• 핵심 규칙 1줄<br>• 핵심 규칙 1줄<br>• → 상세: ref-docs/.."]
+    A ~~~ A1["• 핵심 규칙 1줄<br>• 핵심 규칙 1줄<br>• → 상세: claude/.."]
     B ~~~ B1["제목 — 한 줄 설명<br>테이블, 코드블록,<br>예시 등 상세 내용"]
 ```
 
-**ref-docs 헤더 규칙**: 모든 참고 문서는 `# 제목 — 한 줄 설명` 형식의 첫 줄을 가집니다. 모델이 파일을 열지 않고도 필요한 문서인지 빠르게 판단할 수 있습니다.
+**하니스 문서 헤더 규칙**: 모든 참고 문서는 `# 제목 — 한 줄 설명` 형식의 첫 줄을 가집니다. 모델이 파일을 열지 않고도 필요한 문서인지 빠르게 판단할 수 있습니다.
 
-| 문서 | 설명 |
+**하니스 문서** — `/dotclaude-init` 시 프로젝트의 `{문서폴더}/claude/`(🔒 읽기전용)에 배포됩니다. (dotclaude repo 소스: `ref-docs/`)
+
+| 문서 (`claude/`) | 설명 |
 |------|------|
-| `ref-docs/agent-delegation.md` | 에이전트 위임 규칙, 파이프라인, 호출 패턴 |
-| `ref-docs/context-db.md` | Context DB 스키마, helper.sh 명령어 |
-| `ref-docs/context-monitor.md` | HUD + compaction 감지/복구 |
-| `ref-docs/hooks.md` | 5개 Hook 역할, 시점, 성능 최적화 |
-| `ref-docs/conventions.md` | 커밋, 주석, 로깅 컨벤션 |
-| `ref-docs/setup.md` | 새 환경 초기 설정 가이드 |
-| `ref-docs/sdd.md` | SDD 스펙 문서 작성/관리 최소 공통 가이드라인 |
+| `agent-delegation.md` | 에이전트 위임 규칙, 파이프라인, 호출 패턴 |
+| `context-db.md` | Context DB 스키마, helper.sh 명령어 |
+| `context-monitor.md` | HUD + compaction 감지/복구 |
+| `hooks.md` | 5개 Hook 역할, 시점, 성능 최적화 |
+| `conventions.md` | 커밋, 주석, 로깅 컨벤션 |
+| `setup.md` | 새 환경 초기 설정 가이드 |
+| `sdd.md` | SDD 스펙 문서 작성/관리 최소 공통 가이드라인 |
+
+> 프로젝트 스펙 문서는 `{문서폴더}/specs/`에 작성합니다(사용자 소유). → 위 "📝 SDD 스펙 관리" 참고
 
 **새 지침 추가 시**:
 1. 매 턴 참조 필요 → CLAUDE.md에 1줄 추가
-2. 상세/예시/테이블 → ref-docs에 작성 후 CLAUDE.md에서 참조
+2. 상세/예시/테이블 → 별도 문서로 분리 후 CLAUDE.md에서 참조 (하니스는 `claude/`, 프로젝트는 `specs/`)
 3. 프로젝트별 규칙 → 프로젝트 CLAUDE.md의 PROJECT 섹션에 추가
 
 ---
@@ -416,7 +420,7 @@ graph LR
 | 계획·설계를 md로 저장한 직후 | 방금 저장된 문서를 기존 스펙과 대조 |
 | 외부 스펙을 `specs/`에 복사·추가 | 추가된 문서의 frontmatter·중복·정합성 점검 |
 
-> **저장·복사 행위 자체를 "스펙 작성"으로 보고 자동 발동**합니다. 가이드라인: `ref-docs/sdd.md`
+> **저장·복사 행위 자체를 "스펙 작성"으로 보고 자동 발동**합니다. 가이드라인: `claude/sdd.md`
 
 ---
 
