@@ -343,6 +343,7 @@ grep -q '.ctx_state' .gitignore 2>/dev/null || echo '.claude/.ctx_state' >> .git
 grep -q '.backup-' .gitignore 2>/dev/null || echo '.claude/.backup-*' >> .gitignore
 grep -q '.ralph_state' .gitignore 2>/dev/null || echo '.claude/.ralph_state' >> .gitignore
 grep -q '.hud_cache' .gitignore 2>/dev/null || echo '.claude/.hud_cache' >> .gitignore
+grep -q '.cost_state' .gitignore 2>/dev/null || echo '.claude/.cost_state' >> .gitignore
 grep -q '.hook_feedback' .gitignore 2>/dev/null || echo '.claude/.hook_feedback' >> .gitignore
 grep -q '.project_root' .gitignore 2>/dev/null || echo '.claude/.project_root' >> .gitignore
 grep -q '.messenger_enabled' .gitignore 2>/dev/null || echo '.claude/.messenger_enabled' >> .gitignore

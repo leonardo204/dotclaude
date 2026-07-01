@@ -3,7 +3,7 @@
 ## 개요
 
 HUD statusline은 `dist/hud/statusline.js`(TypeScript 빌드 산출물)가 담당하며, 두 역할을 수행:
-1. **HUD**: 버전, CWD, 리밋, ctx%, 에이전트 수를 statusline에 표시
+1. **HUD**: 버전, CWD, 비용, 리밋, ctx%, 에이전트 수를 statusline에 표시
 2. **Compaction 대응**: context usage % 추적 → threshold 기반 live context 백업/복구
 
 > ⚠️ 구 `scripts/context-monitor.mjs`는 **제거됨** — 동일 기능이 `statusline.js`로 통합되었다. 실제 statusLine은 `dist/hud/statusline.js`이다.
@@ -11,17 +11,25 @@ HUD statusline은 `dist/hud/statusline.js`(TypeScript 빌드 산출물)가 담�
 ### HUD 출력 예시
 
 ```
-[CC#1.0.80] | ~/work/myproject | 5h:45%(3h42m) wk:12%(2d5h) | ctx:14% | agents:3
+[CC#1.0.80] | ~/work/myproject (main) | $12.90 (today $1.2) | 5h:45%(3h42m) wk:12%(2d5h) | Opus | ctx:14% | agents:3
 ```
 
 | 슬롯 | 데이터 소스 |
 |------|------------|
 | CC 버전 | stdin `version` |
-| CWD | stdin `workspace.current_dir` (~ 축약) |
+| CWD (branch) | stdin `workspace.current_dir` (~ 축약) + `git branch` |
+| 비용 | stdin `cost.total_cost_usd` 증분 누적 → `.claude/.cost_state` (추적 시작 이후 누적 + 오늘) |
 | 5h 리밋 | stdin `rate_limits.five_hour` 우선, 없으면 fetcher 캐시 |
 | 주간 리밋 | stdin `rate_limits.seven_day` 우선, 없으면 fetcher 캐시 |
+| 모델 | stdin `model.display_name` |
 | ctx% | stdin `context_window.used_percentage` |
 | agents | subagent transcript 파일 카운트 |
+
+### 비용 누적 (.cost_state)
+
+stdin `cost.total_cost_usd`는 **현재 세션**의 API 누적 추정 비용(구독자 포함 모든 과금 모델에 채워지는 클라이언트 추정치)이라, 세션이 바뀌면 0부터 다시 증가한다. HUD는 렌더마다 **세션 내 증분(delta)만** `.claude/.cost_state`에 더해 프로젝트 전체 누적(`total_usd`)과 오늘 사용량(`today_usd`, 로컬 날짜 롤오버 시 리셋)을 유지한다. 파일 I/O만 사용하고 sqlite를 핫패스에 넣지 않아 렌더 성능 목표(≤10ms)를 지킨다.
+
+> "추적 시작"은 `.cost_state` 최초 생성 시점(≈ 신규 프로젝트의 `dotclaude init` 직후 첫 HUD 렌더)이다. Claude Code는 과거 세션별 비용을 보관하지 않으므로 기존 프로젝트는 이 기능 도입 시점부터 누적한다. 비용 색상: 기본 green, ≥$50 yellow, ≥$200 red.
 
 ## 아키텍처
 
@@ -31,6 +39,7 @@ HUD statusline은 `dist/hud/statusline.js`(TypeScript 빌드 산출물)가 담�
         ├─ OAuth API 호출 (캐시 90초 TTL) → rate limit 조회
         ├─ subagent transcript 파일 카운트
         ├─ .claude/.ctx_state에 ctx% 기록 (compaction 감지용)
+        ├─ .claude/.cost_state에 비용 증분 누적 (프로젝트 누적/오늘)
         └─ 통합 HUD 한 줄 출력
 
 [사용자 입력] on-prompt.sh (UserPromptSubmit hook)
@@ -48,6 +57,7 @@ HUD statusline은 `dist/hud/statusline.js`(TypeScript 빌드 산출물)가 담�
 | `~/.claude/dist/hud/statusline.js` | HUD + ctx% 캡처 (실제 statusLine) |
 | `~/.claude/dist/hud/fetcher.js` | rate limit 백그라운드 폴백 (stdin 없을 때만) |
 | `.claude/.ctx_state` | JSON 상태 파일 (gitignore 대상) |
+| `.claude/.cost_state` | 프로젝트 누적/오늘 비용 상태 (gitignore 대상) |
 | `~/.claude/.hud_cache` | OAuth API 응답 캐시 (글로벌) |
 | `.claude/db/context.db` → `live_context` 테이블 | 작업 상태 KV 저장소 |
 | `.claude/hooks/on-prompt.sh` | 복구 주입 로직 |

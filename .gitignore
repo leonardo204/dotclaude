@@ -21,3 +21,4 @@ browser-state-*-fingerprint.json
 
 # Testbed
 testbed/
+.claude/.cost_state

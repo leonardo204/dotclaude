@@ -88,6 +88,60 @@ function updateCtxState(cwd, percent) {
   }
   return state;
 }
+function localDate() {
+  const d = /* @__PURE__ */ new Date();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${m}-${day}`;
+}
+function updateCostState(cwd, sessionId, costUsd) {
+  const statePath = join(cwd, ".claude", ".cost_state");
+  if (typeof costUsd !== "number" || Number.isNaN(costUsd)) {
+    try {
+      if (existsSync(statePath)) {
+        const s = JSON.parse(readFileSync(statePath, "utf8"));
+        return { total: s.total_usd ?? 0, today: s.today_usd ?? 0 };
+      }
+    } catch {
+    }
+    return null;
+  }
+  const now = localDate();
+  const sid = sessionId ?? "";
+  let state = {
+    init_ts: (/* @__PURE__ */ new Date()).toISOString(),
+    total_usd: 0,
+    today_date: now,
+    today_usd: 0,
+    cur_session_id: sid,
+    cur_session_usd: 0
+  };
+  try {
+    if (existsSync(statePath))
+      state = JSON.parse(readFileSync(statePath, "utf8"));
+  } catch {
+  }
+  let delta;
+  if (state.cur_session_id === sid) {
+    delta = costUsd - (state.cur_session_usd ?? 0);
+  } else {
+    state.cur_session_id = sid;
+    delta = costUsd;
+  }
+  if (!(delta > 0)) delta = 0;
+  state.cur_session_usd = costUsd;
+  if (state.today_date !== now) {
+    state.today_date = now;
+    state.today_usd = 0;
+  }
+  state.total_usd = (state.total_usd ?? 0) + delta;
+  state.today_usd = (state.today_usd ?? 0) + delta;
+  try {
+    writeFileSync(statePath, JSON.stringify(state));
+  } catch {
+  }
+  return { total: state.total_usd, today: state.today_usd };
+}
 function loadHudCache() {
   try {
     if (!existsSync(HUD_CACHE_FILE)) return null;
@@ -200,6 +254,16 @@ function countSubagents(sessionId) {
   }
   return result;
 }
+function fmtUsd(n) {
+  if (n >= 100) return `$${n.toFixed(0)}`;
+  if (n >= 10) return `$${n.toFixed(1)}`;
+  return `$${n.toFixed(2)}`;
+}
+function renderCost(c) {
+  const color = c.total >= 200 ? C.red : c.total >= 50 ? C.yellow : C.green;
+  const todayPart = c.today > 0 ? ` ${C.dim}(today ${fmtUsd(c.today)})${C.reset}` : "";
+  return `${color}${fmtUsd(c.total)}${C.reset}${todayPart}`;
+}
 function renderContext(percent) {
   const color = percent >= 85 ? C.red : percent >= 70 ? C.yellow : C.green;
   const suffix = percent >= 90 ? " CRITICAL" : percent >= 80 ? " COMPRESS?" : "";
@@ -229,6 +293,10 @@ async function main() {
     }
     const branchPart = branchName ? ` ${C.dim}(${C.reset}${C.green}${branchName}${C.reset}${C.dim})${C.reset}` : "";
     parts.push(`${C.cyan}${shortenCwd(cwd)}${C.reset}${branchPart}`);
+    const cost = updateCostState(cwd, stdin.session_id, stdin.cost?.total_cost_usd);
+    if (cost && cost.total > 0) {
+      parts.push(renderCost(cost));
+    }
     const sl = stdin.rate_limits;
     const slFive = normalizeStdinLimit(sl?.five_hour);
     const slSeven = normalizeStdinLimit(sl?.seven_day);
