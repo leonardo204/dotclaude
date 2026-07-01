@@ -10,7 +10,8 @@
  *
  * 출력 형식:
  * [CC#1.0] | ~/work/project (main) | $12.90 (today $1.2) | 5h:38%(3h42m) wk:12%(2d5h) | Opus | ctx:14% | agents:0
- *   └ 비용: 프로젝트 추적 시작(≈init) 이후 누적 예상비용 + 오늘 사용량 (.claude/.cost_state)
+ *   └ 비용: 프로젝트 로그(JSONL)를 ccusage 방식으로 집계한 누적 + 오늘 예상비용.
+ *     실제 계산은 백그라운드 워커(cost.js)가 수행하고, statusline은 캐시만 읽는다.
  */
 
 import {
@@ -20,8 +21,9 @@ import {
   readdirSync,
   statSync,
 } from "node:fs";
-import { join } from "node:path";
-import { execSync } from "node:child_process";
+import { join, dirname } from "node:path";
+import { execSync, spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { homedir } from "node:os";
 
 // ── ANSI Colors ──
@@ -72,8 +74,6 @@ interface StdinData {
   };
   model?: { display_name?: string };
   session_id?: string;
-  // CC: 현재 세션의 모든 API 호출 누적 추정 비용(USD). 모든 과금 모델에 채워짐(클라이언트 추정치).
-  cost?: { total_cost_usd?: number };
   // CC 2.1+ : Pro/Max 구독자에게 첫 API 응답 후 제공 (각 윈도우 독립적으로 absent 가능)
   rate_limits?: {
     five_hour?: { used_percentage?: number; resets_at?: number | string };
@@ -174,17 +174,16 @@ function updateCtxState(cwd: string, percent: number): CtxState {
   return state;
 }
 
-// ── Cost state persistence (.claude/.cost_state) ──
-// stdin.cost.total_cost_usd 는 "현재 세션"의 누적 추정 비용이라, 세션이 바뀌면 0부터
-// 다시 증가한다. 렌더마다 세션 내 "증분(delta)"만 더해 프로젝트 전체 누적과 오늘
-// 사용량을 파일에 유지한다. sqlite를 핫패스에 넣지 않아 렌더 성능 목표를 지킨다.
-interface CostState {
-  init_ts: string; // .cost_state 최초 생성 시각 ≈ 프로젝트 비용 추적 시작(≈init)
-  total_usd: number; // 추적 시작 이후 프로젝트 누적 (모든 세션 delta 합)
-  today_date: string; // 오늘 버킷의 로컬 날짜 (YYYY-MM-DD)
-  today_usd: number; // 오늘 누적 (날짜가 바뀌면 리셋)
-  cur_session_id: string; // 현재 추적 중인 세션 id
-  cur_session_usd: number; // 그 세션에서 마지막으로 관측한 total_cost_usd
+// ── Cost: 백그라운드 워커(cost.js)가 집계한 캐시를 읽고, stale하면 워커를 스폰 ──
+// 실제 계산(JSONL 파싱·중복제거·단가 적용)은 무거우므로 렌더 핫패스에서 하지 않는다.
+const COST_CACHE_FILE = join(homedir(), ".claude", ".hud_cost_cache.json");
+const COST_STALE_MS = 8000; // 캐시가 이보다 오래되면 워커 재스폰
+
+interface CostEntry {
+  today: number;
+  total: number;
+  date: string; // 워커 실행 시점의 로컬 날짜 (YYYY-MM-DD)
+  ts: number; // 워커 실행 epoch ms
 }
 
 function localDate(): string {
@@ -194,69 +193,46 @@ function localDate(): string {
   return `${d.getFullYear()}-${m}-${day}`;
 }
 
-function updateCostState(
-  cwd: string,
-  sessionId: string | undefined,
-  costUsd: number | undefined
-): { total: number; today: number } | null {
-  const statePath = join(cwd, ".claude", ".cost_state");
-
-  // cost 정보가 없으면(구버전 CC/미제공) — 기존 누적치가 있으면 그대로 표시, 없으면 숨김
-  if (typeof costUsd !== "number" || Number.isNaN(costUsd)) {
-    try {
-      if (existsSync(statePath)) {
-        const s = JSON.parse(readFileSync(statePath, "utf8")) as CostState;
-        return { total: s.total_usd ?? 0, today: s.today_usd ?? 0 };
-      }
-    } catch {
-      // ignore
-    }
-    return null;
-  }
-
-  const now = localDate();
-  const sid = sessionId ?? "";
-  let state: CostState = {
-    init_ts: new Date().toISOString(),
-    total_usd: 0,
-    today_date: now,
-    today_usd: 0,
-    cur_session_id: sid,
-    cur_session_usd: 0,
-  };
+// stale/부재 시 detached 워커 스폰 (fire-and-forget, 렌더를 블록하지 않음)
+function spawnCostWorker(cwd: string): void {
   try {
-    if (existsSync(statePath))
-      state = JSON.parse(readFileSync(statePath, "utf8")) as CostState;
-  } catch {
-    // 손상 시 새 상태로 재시작
-  }
-
-  // 세션 내 증분 계산. 세션이 바뀌면 관측된 누적치 전체가 신규 지출.
-  let delta: number;
-  if (state.cur_session_id === sid) {
-    delta = costUsd - (state.cur_session_usd ?? 0);
-  } else {
-    state.cur_session_id = sid;
-    delta = costUsd;
-  }
-  if (!(delta > 0)) delta = 0; // 감소/음수 방어
-  state.cur_session_usd = costUsd;
-
-  // 날짜 롤오버 (자정 경과 시 오늘 버킷 리셋)
-  if (state.today_date !== now) {
-    state.today_date = now;
-    state.today_usd = 0;
-  }
-
-  state.total_usd = (state.total_usd ?? 0) + delta;
-  state.today_usd = (state.today_usd ?? 0) + delta;
-
-  try {
-    writeFileSync(statePath, JSON.stringify(state));
+    const worker = join(dirname(fileURLToPath(import.meta.url)), "cost.js");
+    if (!existsSync(worker)) return;
+    const child = spawn(process.execPath, [worker, cwd], {
+      detached: true,
+      stdio: "ignore",
+    });
+    child.unref();
   } catch {
     // ignore
   }
-  return { total: state.total_usd, today: state.today_usd };
+}
+
+// 캐시를 읽고(있으면) 표시값 반환. 부재/오래됨이면 워커를 스폰한다.
+function loadCost(cwd: string): { total: number; today: number } | null {
+  let entry: CostEntry | undefined;
+  try {
+    if (existsSync(COST_CACHE_FILE)) {
+      const map = JSON.parse(readFileSync(COST_CACHE_FILE, "utf8")) as Record<
+        string,
+        CostEntry
+      >;
+      entry = map[cwd];
+    }
+  } catch {
+    // ignore
+  }
+
+  const stale =
+    !entry ||
+    Date.now() - entry.ts > COST_STALE_MS ||
+    entry.date !== localDate();
+  if (stale) spawnCostWorker(cwd);
+
+  if (!entry) return null;
+  // 날짜가 바뀌었으면 today는 갱신 전까지 0으로 (누적은 유효)
+  const today = entry.date === localDate() ? entry.today : 0;
+  return { total: entry.total, today };
 }
 
 // ── 캐시 파일에서 usage 데이터 읽기 (API 호출 없음) ──
@@ -479,8 +455,8 @@ async function main(): Promise<void> {
       : "";
     parts.push(`${C.cyan}${shortenCwd(cwd)}${C.reset}${branchPart}`);
 
-    // 2.5 Cost — 프로젝트 추적 시작(≈init) 이후 누적 예상비용 (+ 오늘)
-    const cost = updateCostState(cwd, stdin.session_id, stdin.cost?.total_cost_usd);
+    // 2.5 Cost — 프로젝트 로그 기반 누적 예상비용 (+ 오늘). 캐시 읽기만, 계산은 워커.
+    const cost = loadCost(cwd);
     if (cost && cost.total > 0) {
       parts.push(renderCost(cost));
     }

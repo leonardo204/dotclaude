@@ -6,8 +6,9 @@ import {
   readdirSync,
   statSync
 } from "node:fs";
-import { join } from "node:path";
-import { execSync } from "node:child_process";
+import { join, dirname } from "node:path";
+import { execSync, spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { homedir } from "node:os";
 var C = {
   red: "\x1B[31m",
@@ -88,59 +89,40 @@ function updateCtxState(cwd, percent) {
   }
   return state;
 }
+var COST_CACHE_FILE = join(homedir(), ".claude", ".hud_cost_cache.json");
+var COST_STALE_MS = 8e3;
 function localDate() {
   const d = /* @__PURE__ */ new Date();
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${d.getFullYear()}-${m}-${day}`;
 }
-function updateCostState(cwd, sessionId, costUsd) {
-  const statePath = join(cwd, ".claude", ".cost_state");
-  if (typeof costUsd !== "number" || Number.isNaN(costUsd)) {
-    try {
-      if (existsSync(statePath)) {
-        const s = JSON.parse(readFileSync(statePath, "utf8"));
-        return { total: s.total_usd ?? 0, today: s.today_usd ?? 0 };
-      }
-    } catch {
+function spawnCostWorker(cwd) {
+  try {
+    const worker = join(dirname(fileURLToPath(import.meta.url)), "cost.js");
+    if (!existsSync(worker)) return;
+    const child = spawn(process.execPath, [worker, cwd], {
+      detached: true,
+      stdio: "ignore"
+    });
+    child.unref();
+  } catch {
+  }
+}
+function loadCost(cwd) {
+  let entry;
+  try {
+    if (existsSync(COST_CACHE_FILE)) {
+      const map = JSON.parse(readFileSync(COST_CACHE_FILE, "utf8"));
+      entry = map[cwd];
     }
-    return null;
-  }
-  const now = localDate();
-  const sid = sessionId ?? "";
-  let state = {
-    init_ts: (/* @__PURE__ */ new Date()).toISOString(),
-    total_usd: 0,
-    today_date: now,
-    today_usd: 0,
-    cur_session_id: sid,
-    cur_session_usd: 0
-  };
-  try {
-    if (existsSync(statePath))
-      state = JSON.parse(readFileSync(statePath, "utf8"));
   } catch {
   }
-  let delta;
-  if (state.cur_session_id === sid) {
-    delta = costUsd - (state.cur_session_usd ?? 0);
-  } else {
-    state.cur_session_id = sid;
-    delta = costUsd;
-  }
-  if (!(delta > 0)) delta = 0;
-  state.cur_session_usd = costUsd;
-  if (state.today_date !== now) {
-    state.today_date = now;
-    state.today_usd = 0;
-  }
-  state.total_usd = (state.total_usd ?? 0) + delta;
-  state.today_usd = (state.today_usd ?? 0) + delta;
-  try {
-    writeFileSync(statePath, JSON.stringify(state));
-  } catch {
-  }
-  return { total: state.total_usd, today: state.today_usd };
+  const stale = !entry || Date.now() - entry.ts > COST_STALE_MS || entry.date !== localDate();
+  if (stale) spawnCostWorker(cwd);
+  if (!entry) return null;
+  const today = entry.date === localDate() ? entry.today : 0;
+  return { total: entry.total, today };
 }
 function loadHudCache() {
   try {
@@ -293,7 +275,7 @@ async function main() {
     }
     const branchPart = branchName ? ` ${C.dim}(${C.reset}${C.green}${branchName}${C.reset}${C.dim})${C.reset}` : "";
     parts.push(`${C.cyan}${shortenCwd(cwd)}${C.reset}${branchPart}`);
-    const cost = updateCostState(cwd, stdin.session_id, stdin.cost?.total_cost_usd);
+    const cost = loadCost(cwd);
     if (cost && cost.total > 0) {
       parts.push(renderCost(cost));
     }

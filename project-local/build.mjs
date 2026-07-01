@@ -22,6 +22,7 @@ const entryPoints = [
   { in: 'src/hooks/bridge.ts', out: 'dist/hooks/bridge' },
   { in: 'src/hud/statusline.ts', out: 'dist/hud/statusline' },
   { in: 'src/hud/fetcher.ts', out: 'dist/hud/fetcher' },
+  { in: 'src/hud/cost.ts', out: 'dist/hud/cost' },
 ];
 
 if (isWatch) {
@@ -47,5 +48,5 @@ if (isWatch) {
       })
     )
   );
-  console.log('[build] done → dist/hooks/bridge.js, dist/hud/statusline.js, dist/hud/fetcher.js');
+  console.log('[build] done → dist/hooks/bridge.js, dist/hud/statusline.js, dist/hud/fetcher.js, dist/hud/cost.js');
 }
