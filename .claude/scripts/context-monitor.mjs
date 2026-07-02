@@ -151,11 +151,59 @@ function writeBackCredentials(tokenData) {
   } catch {}
 }
 
+// 키체인에서 얻은 자격증명을 .credentials.json 에 최초 1회 프라이밍한다.
+// (파일이 없거나 비어 있을 때만). 이후 조회는 파일에서 읽어 키체인 프롬프트를 피한다.
+function primeCredentialsFile(oauth) {
+  const credPath = join(homedir(), ".claude", ".credentials.json");
+  try {
+    if (existsSync(credPath) && readFileSync(credPath, "utf8").trim() !== "") return;
+    const payload = JSON.stringify(
+      {
+        claudeAiOauth: {
+          accessToken: oauth.accessToken,
+          refreshToken: oauth.refreshToken,
+          expiresAt: oauth.expiresAt,
+        },
+      },
+      null,
+      2
+    );
+    writeFileSync(credPath, payload, { mode: 0o600 });
+  } catch {}
+}
+
 function getOAuthToken() {
   let oauth = null;
+  let fromKeychain = false;
 
-  // 1) macOS Keychain
-  if (process.platform === "darwin") {
+  // 1) 파일 우선 (.credentials.json → credentials.json) — 프롬프트 없음
+  const credPaths = [
+    join(homedir(), ".claude", ".credentials.json"),
+    join(homedir(), ".claude", "credentials.json"),
+  ];
+  for (const p of credPaths) {
+    try {
+      if (!existsSync(p)) continue;
+      const raw = readFileSync(p, "utf8").trim();
+      if (!raw) continue;
+      const creds = JSON.parse(raw);
+      const entries = Array.isArray(creds) ? creds : [creds];
+      for (const entry of entries) {
+        oauth = extractOAuth(entry);
+        if (oauth) break;
+      }
+      if (oauth) break;
+    } catch {}
+  }
+
+  // 2) 파일에 없을 때만 macOS Keychain (opt-out: DOTCLAUDE_DISABLE_KEYCHAIN=1)
+  //    ACL 미승인 시 security가 GUI 프롬프트로 멈추며 폴링마다 프로세스가 쌓이는 문제를,
+  //    파일 우선 + 최초 1회 프라이밍으로 회피한다.
+  if (
+    !oauth &&
+    process.platform === "darwin" &&
+    process.env.DOTCLAUDE_DISABLE_KEYCHAIN !== "1"
+  ) {
     try {
       const raw = execSync(
         'security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null',
@@ -167,30 +215,14 @@ function getOAuthToken() {
         oauth = extractOAuth(entry);
         if (oauth) break;
       }
+      fromKeychain = !!oauth;
     } catch {}
   }
 
-  // 2) File-based credentials
-  if (!oauth) {
-    const credPaths = [
-      join(homedir(), ".claude", ".credentials.json"),
-      join(homedir(), ".claude", "credentials.json"),
-    ];
-    for (const p of credPaths) {
-      try {
-        if (!existsSync(p)) continue;
-        const creds = JSON.parse(readFileSync(p, "utf8"));
-        const entries = Array.isArray(creds) ? creds : [creds];
-        for (const entry of entries) {
-          oauth = extractOAuth(entry);
-          if (oauth) break;
-        }
-        if (oauth) break;
-      } catch {}
-    }
-  }
-
   if (!oauth) return null;
+
+  // 키체인에서 얻었으면 파일에 프라이밍 → 다음부터 키체인을 안 건드림(프롬프트 최대 1회).
+  if (fromKeychain) primeCredentialsFile(oauth);
 
   // Check expiry and refresh if needed
   if (oauth.expiresAt && oauth.expiresAt <= Date.now() && oauth.refreshToken) {
