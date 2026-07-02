@@ -68,9 +68,17 @@ async function refreshOAuthToken(refreshToken) {
   }
   return null;
 }
+var cachedToken = null;
+var MAX_CACHE_MS = 5 * 60 * 1e3;
+var MIN_CACHE_MS = 15 * 1e3;
+var keychainBlockedUntil = 0;
+var KEYCHAIN_BACKOFF_MS = 15 * 60 * 1e3;
 async function getOAuthToken() {
+  if (cachedToken && cachedToken.expiresAt > Date.now()) {
+    return cachedToken.value;
+  }
   let oauth = null;
-  if (process.platform === "darwin") {
+  if (process.platform === "darwin" && process.env.DOTCLAUDE_DISABLE_KEYCHAIN !== "1" && Date.now() >= keychainBlockedUntil) {
     try {
       const raw = execSync(
         'security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null',
@@ -83,6 +91,7 @@ async function getOAuthToken() {
         if (oauth) break;
       }
     } catch {
+      keychainBlockedUntil = Date.now() + KEYCHAIN_BACKOFF_MS;
     }
   }
   if (!oauth) {
@@ -93,7 +102,9 @@ async function getOAuthToken() {
     for (const p of credPaths) {
       try {
         if (!existsSync(p)) continue;
-        const creds = JSON.parse(readFileSync(p, "utf8"));
+        const raw = readFileSync(p, "utf8").trim();
+        if (!raw) continue;
+        const creds = JSON.parse(raw);
         const entries = Array.isArray(creds) ? creds : [creds];
         for (const entry of entries) {
           oauth = extractOAuth(entry);
@@ -105,11 +116,17 @@ async function getOAuthToken() {
     }
   }
   if (!oauth) return null;
+  let token = oauth.accessToken;
+  let ttl = MAX_CACHE_MS;
   if (oauth.expiresAt && oauth.expiresAt <= Date.now() && oauth.refreshToken) {
     const newToken = await refreshOAuthToken(oauth.refreshToken);
-    if (newToken) return newToken;
+    if (newToken) token = newToken;
+    else ttl = MIN_CACHE_MS;
+  } else if (oauth.expiresAt) {
+    ttl = Math.min(Math.max(oauth.expiresAt - Date.now(), 0), MAX_CACHE_MS);
   }
-  return oauth.accessToken;
+  cachedToken = { value: token, expiresAt: Date.now() + Math.max(ttl, MIN_CACHE_MS) };
+  return token;
 }
 
 // src/hud/fetcher.ts
