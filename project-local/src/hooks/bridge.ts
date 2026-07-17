@@ -5,7 +5,8 @@
  *   session-start  → SessionStart 핸들러
  *   prompt         → UserPromptSubmit 핸들러
  *   post-edit      → PostToolUse (Edit/Write) 핸들러
- *   post-bash      → PostToolUse (Bash) 핸들러
+ *   post-bash      → PostToolUse (Bash, 성공) 핸들러
+ *   post-bash-fail → PostToolUseFailure (Bash, 실패) 핸들러
  *   stop-session   → Stop (세션 통계) 핸들러
  *   stop-ralph     → Stop (ralph persist) 핸들러
  *
@@ -17,31 +18,14 @@ import { existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ContextDB } from '../shared/db.js';
+import { readStdin } from './stdin.js';
 import { handleSessionStart } from './events/session-start.js';
 import { handlePrompt } from './events/prompt.js';
 import { handlePostEdit } from './events/post-edit.js';
 import { handlePostBash } from './events/post-bash.js';
+import { handlePostBashFailure } from './events/post-bash-failure.js';
 import { handleStopSession } from './events/stop-session.js';
 import { handleStopRalph } from './events/stop-ralph.js';
-
-// === stdin 읽기 ===
-async function readStdin(): Promise<string> {
-  return new Promise((resolve) => {
-    let data = '';
-    let resolved = false;
-    const done = (result: string) => {
-      if (!resolved) {
-        resolved = true;
-        resolve(result);
-      }
-    };
-    process.stdin.setEncoding('utf8');
-    process.stdin.on('data', (chunk) => { data += chunk; });
-    process.stdin.on('end', () => done(data.trim()));
-    // stdin이 없거나 바로 닫히면 빈 문자열 반환
-    setTimeout(() => done(data.trim()), 50);
-  });
-}
 
 // === 프로젝트 루트 탐색 ===
 function findProjectRoot(): string {
@@ -117,6 +101,10 @@ async function main(): Promise<void> {
 
       case 'post-bash':
         await handlePostBash({ projectRoot, db, stdinData });
+        break;
+
+      case 'post-bash-fail':
+        await handlePostBashFailure({ projectRoot, db, stdinData });
         break;
 
       case 'stop-session':

@@ -6,17 +6,13 @@
  */
 
 import { readFileSync, existsSync } from 'node:fs';
+import type { RawHookInput, StopInput } from '../../shared/types.js';
 
 interface RalphState {
   active?: boolean;
   status?: string;
   iteration?: number;
   goal?: string;
-}
-
-interface StopInput {
-  stop_hook_active?: boolean;
-  reason?: string;
 }
 
 interface StopRalphInput {
@@ -31,10 +27,11 @@ export async function handleStopRalph({ projectRoot, stdinData }: StopRalphInput
   if (!existsSync(ralphStatePath)) return;
 
   // stdin에서 Stop hook input 읽기
-  let hookInput: StopInput = {};
+  // 실측 Stop 페이로드 구조는 shared/types.ts의 StopInput 참조 (reason 필드는 없다).
+  let hookInput: RawHookInput<StopInput> = {};
   if (stdinData) {
     try {
-      hookInput = JSON.parse(stdinData) as StopInput;
+      hookInput = JSON.parse(stdinData) as RawHookInput<StopInput>;
     } catch {
       // 빈 문자열이나 파싱 실패 시 무시
     }

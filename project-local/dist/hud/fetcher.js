@@ -145,7 +145,8 @@ function isAlreadyRunning() {
       try {
         process.kill(pid, "SIGUSR1");
         console.log(`[fetcher] sent SIGUSR1 to running process (pid: ${pid})`);
-      } catch {}
+      } catch {
+      }
       return true;
     } catch {
       removePid();

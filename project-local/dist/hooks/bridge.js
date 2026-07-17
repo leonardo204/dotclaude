@@ -332,6 +332,41 @@ var ContextDB = class {
   }
 };
 
+// src/hooks/stdin.ts
+var SAFETY_TIMEOUT_MS = 1e4;
+async function readStdin(stream = process.stdin, safetyTimeoutMs = SAFETY_TIMEOUT_MS) {
+  if (stream.isTTY) return "";
+  let data = "";
+  let completed = false;
+  const read = (async () => {
+    try {
+      stream.setEncoding("utf8");
+      for await (const chunk of stream) {
+        data += chunk;
+      }
+    } catch {
+    } finally {
+      completed = true;
+    }
+  })();
+  let timer;
+  const safety = new Promise((resolve) => {
+    timer = setTimeout(resolve, safetyTimeoutMs);
+  });
+  try {
+    await Promise.race([read, safety]);
+  } finally {
+    clearTimeout(timer);
+  }
+  if (!completed) {
+    try {
+      stream.destroy?.();
+    } catch {
+    }
+  }
+  return data.trim();
+}
+
 // src/hooks/events/session-start.ts
 import { readFileSync as readFileSync2, writeFileSync, readdirSync, existsSync } from "node:fs";
 import { join as join2, basename } from "node:path";
@@ -624,9 +659,10 @@ async function handlePostEdit({ projectRoot, db, stdinData }) {
   const filePath = input.tool_input?.file_path;
   if (!filePath) return;
   const relPath = filePath.startsWith(projectRoot + "/") ? filePath.slice(projectRoot.length + 1) : filePath;
+  const toolName = input.tool_name ?? "Edit";
   const sessionId = db.sessionCurrent();
   if (sessionId > 0) {
-    db.toolLog(sessionId, "Edit", relPath);
+    db.toolLog(sessionId, toolName, relPath);
   }
   if (filePath.endsWith(".sh") && input.tool_name === "Write") {
     try {
@@ -636,22 +672,99 @@ async function handlePostEdit({ projectRoot, db, stdinData }) {
   }
 }
 
-// src/hooks/events/post-bash.ts
-function classifyError(output) {
-  const lower = output.toLowerCase();
-  if (/error|failed|fatal/.test(lower)) {
-    if (/build|compile/.test(lower)) return "build_fail";
-    if (/test/.test(lower)) return "test_fail";
-    if (/conflict/.test(lower)) return "conflict";
-    if (/permission/.test(lower)) return "permission";
-    return "runtime_error";
+// src/hooks/error-classify.ts
+var CATEGORY_RULES = [
+  {
+    category: "build_fail",
+    patterns: [
+      /\bbuild\s+fail(?:ed|ure|s)\b/i,
+      /\bcompilation\s+(?:error|failed)\b/i,
+      /\bcompile\s+error\b/i,
+      /\berror\s+TS\d+\b/,
+      // tsc: "error TS2304: Cannot find name"
+      /\berror\[E\d+\]/
+      // rustc: "error[E0433]"
+    ]
+  },
+  {
+    category: "test_fail",
+    patterns: [
+      // "0 tests failed"는 성공 출력이므로 앞에 숫자가 붙은 형태를 배제한다.
+      /(?<!\d\s)\btests?\s+fail(?:ed|ing|ure|ures)\b/i,
+      /(?<![\d.])(?!0+\b)\d+\s+(?:tests?|specs?|assertions?)\s+fail(?:ed|ing)\b/i,
+      /\bfail(?:ed|ing)\s+tests?\b/i,
+      /\bassertion\s+fail(?:ed|ure)\b/i
+    ]
+  },
+  {
+    category: "conflict",
+    patterns: [
+      /\bmerge\s+conflict\b/i,
+      /^CONFLICT\s*\(/m,
+      // git: "CONFLICT (content): Merge conflict in x"
+      /\bautomatic\s+merge\s+failed\b/i,
+      /\bfix\s+conflicts\b/i
+    ]
+  },
+  {
+    category: "permission",
+    patterns: [
+      // 구 분류기의 치명적 오류: /permission/ 단독 → permission_mode에 오탐.
+      /\bpermission\s+denied\b/i,
+      /\boperation\s+not\s+permitted\b/i,
+      /\b(?:EACCES|EPERM)\b/
+    ]
   }
-  return "";
+];
+var ERROR_SIGNATURES = [
+  // --- 셸 / OS 레벨 ---
+  /:\s*No such file or directory\b/i,
+  /:\s*command not found\b/i,
+  /\bpermission denied\b/i,
+  /\boperation not permitted\b/i,
+  /\b(?:EACCES|EPERM|ENOENT)\b/,
+  /\bsegmentation fault\b/i,
+  /\bbus error\b/i,
+  /\bKilled:\s*\d+/,
+  // macOS OOM/시그널: "Killed: 9"
+  // --- 툴체인 ---
+  /\bnpm ERR!/,
+  /\berror\s+TS\d+\b/,
+  /\berror\[E\d+\]/,
+  // 라인 머리의 "fatal:" / "error:" (git, gcc, cargo 등)
+  /(?:^|\n)\s*(?:fatal|error)(?:\[[^\]]+\])?:\s/i,
+  // 대문자 ERROR: 는 강한 신호 (esbuild "src/app.ts:3:10: ERROR: ...")
+  /\bERROR:\s/,
+  // --- 빌드 / 테스트 / 머지 ---
+  /\bbuild\s+fail(?:ed|ure|s)\b/i,
+  /\bcompilation\s+(?:error|failed)\b/i,
+  /(?<!\d\s)\btests?\s+fail(?:ed|ing|ure|ures)\b/i,
+  /(?<![\d.])(?!0+\b)\d+\s+(?:tests?|specs?|assertions?)\s+fail(?:ed|ing)\b/i,
+  /\bmerge\s+conflict\b/i,
+  /^CONFLICT\s*\(/m,
+  /\bautomatic\s+merge\s+failed\b/i
+];
+function looksLikeError(output) {
+  return ERROR_SIGNATURES.some((re) => re.test(output));
+}
+function classifyError(output) {
+  for (const { category, patterns } of CATEGORY_RULES) {
+    if (patterns.some((re) => re.test(output))) return category;
+  }
+  return "runtime_error";
+}
+function parseExitCode(errorText) {
+  const match = errorText.match(/^\s*exit code (\d+)/i);
+  if (!match?.[1]) return null;
+  const code = Number(match[1]);
+  return Number.isFinite(code) ? code : null;
 }
 function extractFile(output) {
   const match = output.match(/(?:^|[\s:])([^\s:]+\.[a-zA-Z]{1,10})(?:[\s:]|$)/);
   return match?.[1] ?? "";
 }
+
+// src/hooks/events/post-bash.ts
 async function handlePostBash({ db, stdinData }) {
   if (!stdinData) return;
   let input;
@@ -660,17 +773,51 @@ async function handlePostBash({ db, stdinData }) {
   } catch {
     return;
   }
-  const combined = (input.stderr ?? "") + (input.stdout ?? "");
+  const result = input.tool_response;
+  const combined = (result?.stderr ?? "") + (result?.stdout ?? "");
   if (!combined) return;
+  if (!looksLikeError(combined)) return;
   const errType = classifyError(combined);
-  if (!errType) return;
   const errFile = extractFile(combined);
-  db.errorLog(errType, errFile || void 0);
-  const errInfo = `${errType}: ${errFile || "unknown"}`;
-  db.liveSet("error_context", errInfo);
+  try {
+    db.errorLog(errType, errFile || void 0);
+    const errInfo = `${errType}: ${errFile || "unknown"}`;
+    db.liveSet("error_context", errInfo);
+  } catch {
+  }
+}
+
+// src/hooks/events/post-bash-failure.ts
+async function handlePostBashFailure({
+  db,
+  stdinData
+}) {
+  if (!stdinData) return;
+  let input;
+  try {
+    input = JSON.parse(stdinData);
+  } catch {
+    return;
+  }
+  if (input.is_interrupt === true) return;
+  if (typeof input.error !== "string") return;
+  const errorText = input.error;
+  const errType = classifyError(errorText);
+  const errFile = extractFile(errorText);
+  const exitCode = parseExitCode(errorText);
+  try {
+    db.errorLog(errType, errFile || void 0);
+    const suffix = exitCode !== null ? ` (exit ${exitCode})` : "";
+    db.liveSet("error_context", `${errType}: ${errFile || "unknown"}${suffix}`);
+  } catch {
+  }
 }
 
 // src/hooks/events/stop-session.ts
+function localTimestamp(date = /* @__PURE__ */ new Date()) {
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+}
 async function handleStopSession({ db }) {
   const sessionId = db.sessionCurrent();
   if (sessionId <= 0) return;
@@ -688,7 +835,7 @@ async function handleStopSession({ db }) {
     }
   } catch {
   }
-  const now = (/* @__PURE__ */ new Date()).toISOString().replace("T", " ").slice(0, 19);
+  const now = localTimestamp();
   try {
     const updateData = {
       end_time: now,
@@ -782,24 +929,6 @@ async function handleStopRalph({ projectRoot, stdinData }) {
 }
 
 // src/hooks/bridge.ts
-async function readStdin() {
-  return new Promise((resolve) => {
-    let data = "";
-    let resolved = false;
-    const done = (result) => {
-      if (!resolved) {
-        resolved = true;
-        resolve(result);
-      }
-    };
-    process.stdin.setEncoding("utf8");
-    process.stdin.on("data", (chunk) => {
-      data += chunk;
-    });
-    process.stdin.on("end", () => done(data.trim()));
-    setTimeout(() => done(data.trim()), 50);
-  });
-}
 function findProjectRoot() {
   if (process.env["PROJECT_ROOT"]) {
     return process.env["PROJECT_ROOT"];
@@ -854,6 +983,9 @@ async function main() {
         break;
       case "post-bash":
         await handlePostBash({ projectRoot, db, stdinData });
+        break;
+      case "post-bash-fail":
+        await handlePostBashFailure({ projectRoot, db, stdinData });
         break;
       case "stop-session":
         await handleStopSession({ db });

@@ -10,6 +10,22 @@ interface StopSessionInput {
   db: ContextDB;
 }
 
+/**
+ * 로컬 타임존 기준 'YYYY-MM-DD HH:MM:SS' 문자열을 만든다.
+ *
+ * start_time은 db.ts가 SQLite의 datetime('now','localtime')으로 기록한다.
+ * end_time을 toISOString()(UTC)으로 저장하면 두 값의 타임존이 어긋나
+ * 종료 시각이 시작 시각보다 앞서는 세션이 생긴다(실측: 세션 60, start 09:44 → end 05:57).
+ * 따라서 end_time도 반드시 로컬 시각으로 통일한다.
+ */
+export function localTimestamp(date: Date = new Date()): string {
+  const pad = (n: number): string => String(n).padStart(2, '0');
+  return (
+    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
+    ` ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+  );
+}
+
 export async function handleStopSession({ db }: StopSessionInput): Promise<void> {
   const sessionId = db.sessionCurrent();
   if (sessionId <= 0) return;
@@ -35,7 +51,8 @@ export async function handleStopSession({ db }: StopSessionInput): Promise<void>
   }
 
   // 세션 업데이트 (end_time + files_changed + duration_minutes 한 번에)
-  const now = new Date().toISOString().replace('T', ' ').slice(0, 19);
+  // start_time(db.ts의 datetime('now','localtime'))과 타임존을 맞춘다.
+  const now = localTimestamp();
   try {
     const updateData: Partial<Omit<import('../../shared/types.js').SessionInfo, 'id'>> = {
       end_time: now,
