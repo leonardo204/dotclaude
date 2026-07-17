@@ -1,0 +1,24 @@
+
+[1mmessenger.sh[0m — Telegram 메신저 알림 스크립트
+
+사용법:
+  messenger.sh config <bot_token> <chat_id>  봇 토큰과 채팅 ID 설정
+  messenger.sh test                           테스트 메시지 전송
+  messenger.sh on                             알림 활성화
+  messenger.sh off                            알림 비활성화
+  messenger.sh send "메시지"                  메시지 전송
+  messenger.sh status                         현재 설정 상태 표시
+  messenger.sh notify                         세션 종료 알림 (Stop hook 전용)
+  messenger.sh set min_duration <초>          최소 알림 시간 설정
+  messenger.sh set scope <global|project>     알림 범위 설정
+  messenger.sh get <key>                      설정값 조회
+
+설정 파일: /private/tmp/claude-501/-Users-zerolive-work-dotclaude/0e9e6685-e540-405e-90c3-77258ea83319/scratchpad/fakehome/.claude/messenger.json
+
+예시:
+  messenger.sh config <BOT_TOKEN> <CHAT_ID>
+  messenger.sh test
+  messenger.sh send "빌드 완료!"
+  messenger.sh set min_duration 300
+  messenger.sh set scope project
+

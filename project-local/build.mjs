@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * esbuild 빌드 스크립트
- * 3개 진입점을 번들링하여 dist/ 에 출력
+ * 진입점들을 번들링하여 dist/ 에 출력
  */
 
 import * as esbuild from 'esbuild';
@@ -23,6 +23,7 @@ const entryPoints = [
   { in: 'src/hud/statusline.ts', out: 'dist/hud/statusline' },
   { in: 'src/hud/fetcher.ts', out: 'dist/hud/fetcher' },
   { in: 'src/hud/cost.ts', out: 'dist/hud/cost' },
+  { in: 'src/messenger/cli.ts', out: 'dist/messenger/cli' },
 ];
 
 if (isWatch) {
@@ -48,5 +49,7 @@ if (isWatch) {
       })
     )
   );
-  console.log('[build] done → dist/hooks/bridge.js, dist/hud/statusline.js, dist/hud/fetcher.js, dist/hud/cost.js');
+  console.log(
+    `[build] done → ${entryPoints.map(({ out }) => `${out}.js`).join(', ')}`
+  );
 }

@@ -1,0 +1,10 @@
+
+[1m=== Telegram 메신저 설정 상태 ===[0m
+
+  bot_token:     1234567890...(마스킹됨)
+  chat_id:       999999999
+  enabled:       [0;32m활성화[0m
+  min_duration:  300초 (5분)
+  scope:         global
+  설정 파일: /private/tmp/claude-501/-Users-zerolive-work-dotclaude/0e9e6685-e540-405e-90c3-77258ea83319/scratchpad/fakehome/.claude/messenger.json
+
