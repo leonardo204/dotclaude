@@ -190,32 +190,17 @@ info "Cloning dotclaude repository..."
 git clone --depth 1 --quiet "${REPO_URL}" "${TMPDIR_CLONE}"
 ok "Repository cloned."
 
-# ─── Step 4: Install global files ───
-info "Installing global settings to ~/.claude/ ..."
+# ─── Step 4: Deploy global files via manifest (single source of truth) ───
+# 배포 대상은 repo 루트 manifest.json 하나로 정의된다. 하드코딩 복사목록 없음.
+# apply-manifest 가 required/sentinel 가드(구 dist 가드 일반화), deployed_sha256
+# 기록, .dotclaude-installed(applied_sha/version), .dotclaude-manifest.json 을 처리한다.
+info "Deploying global files via manifest..."
 mkdir -p "${DOTCLAUDE_DIR}"
-cp -r "${TMPDIR_CLONE}/global/"* "${DOTCLAUDE_DIR}/"
-ok "Global files installed."
+node "${TMPDIR_CLONE}/bin/apply-manifest.mjs" --scope global --src "${TMPDIR_CLONE}" --dest "${DOTCLAUDE_DIR}"
+chmod +x "${DOTCLAUDE_DIR}/scripts/"*.sh 2>/dev/null || true
+ok "Global files deployed."
 
-# ─── Step 4a: Install scripts/ from global ───
-info "Installing scripts/ files..."
-mkdir -p "${DOTCLAUDE_DIR}/scripts"
-if [ -f "${TMPDIR_CLONE}/global/scripts/messenger.sh" ]; then
-    cp "${TMPDIR_CLONE}/global/scripts/messenger.sh" "${DOTCLAUDE_DIR}/scripts/"
-    chmod +x "${DOTCLAUDE_DIR}/scripts/messenger.sh"
-    ok "messenger.sh installed."
-fi
-
-# ─── Step 4b: Install dist/ files from project-local ───
-info "Installing dist/ bridge and HUD files..."
-if [ ! -d "${TMPDIR_CLONE}/project-local/dist" ]; then
-  error "dist/ not found in repo. Build required before release."
-  exit 1
-fi
-mkdir -p "${DOTCLAUDE_DIR}/dist/hooks" "${DOTCLAUDE_DIR}/dist/hud"
-cp -r "${TMPDIR_CLONE}/project-local/dist/"* "${DOTCLAUDE_DIR}/dist/"
-ok "dist/ files installed."
-
-# ─── Step 4c: HUD scope selection ───
+# ─── Step 4a: HUD scope selection (apply 이후 실행) ───
 echo ""
 printf "${BOLD}StatusLine HUD 설치 범위를 선택하세요:${RESET}\n"
 echo "  1) Global  — 모든 프로젝트에서 HUD 표시 (기본)"
@@ -257,14 +242,15 @@ case "${HUD_CHOICE}" in
         ;;
 esac
 
-# ─── Step 5: Create marker file ───
+# ─── Step 5: Augment marker file ───
+# apply-manifest 가 이미 .dotclaude-installed 에 applied_sha= / version=(VERSION 내용)
+# 을 기록했다. 여기서는 installed_at / repo 메타만 보강한다 (버전 하드코딩 제거).
 INSTALL_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-cat > "${DOTCLAUDE_DIR}/.dotclaude-installed" <<EOF
-installed_at=${INSTALL_DATE}
-repo=${REPO_URL}
-version=1.0.0
-EOF
-ok "Marker file created."
+MARKER="${DOTCLAUDE_DIR}/.dotclaude-installed"
+touch "${MARKER}"
+grep -q '^installed_at=' "${MARKER}" 2>/dev/null || printf 'installed_at=%s\n' "${INSTALL_DATE}" >> "${MARKER}"
+grep -q '^repo=' "${MARKER}" 2>/dev/null || printf 'repo=%s\n' "${REPO_URL}" >> "${MARKER}"
+ok "Marker file updated."
 
 # ─── Done ───
 echo ""

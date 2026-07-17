@@ -46,22 +46,58 @@ if [ ! -f "${DOTCLAUDE_DIR}/.dotclaude-installed" ]; then
     exit 1
 fi
 
+# ─── Deployment source detection: node + installed manifest (manifest-driven) ───
+# 삭제 목록은 설치 시 배치된 resolved manifest 에서 파생한다. node 가 없으면
+# 하드코딩 최소 폴백 목록으로 degrade 한다 (uninstall 은 삭제만 하므로 최악은 잔파일 — 안전).
+APPLY_MANIFEST="${DOTCLAUDE_DIR}/bin/apply-manifest.mjs"
+INSTALLED_MANIFEST="${DOTCLAUDE_DIR}/.dotclaude-manifest.json"
+HAVE_NODE=false
+if command -v node >/dev/null 2>&1 && [ -f "${APPLY_MANIFEST}" ] && [ -f "${INSTALLED_MANIFEST}" ]; then
+    HAVE_NODE=true
+fi
+
+# 하드코딩 최소 폴백 목록 (node/manifest 부재 시에만 사용)
+FALLBACK_FILES=(
+    "${DOTCLAUDE_DIR}/CLAUDE.md"
+    "${DOTCLAUDE_DIR}/settings.json"
+    "${DOTCLAUDE_DIR}/MEMORY-example.md"
+    "${DOTCLAUDE_DIR}/MEMORY.md"
+    "${DOTCLAUDE_DIR}/.dotclaude-manifest.json"
+    "${DOTCLAUDE_DIR}/messenger.json"
+    "${DOTCLAUDE_DIR}/.hud_disabled"
+    "${DOTCLAUDE_DIR}/scripts/context-monitor.mjs"
+    "${DOTCLAUDE_DIR}/scripts/messenger.sh"
+)
+FALLBACK_DIRS=(
+    "${DOTCLAUDE_DIR}/dist"
+    "${DOTCLAUDE_DIR}/bin"
+    "${DOTCLAUDE_DIR}/channels"
+    "${DOTCLAUDE_DIR}/commands"
+)
+
 # ─── Interactive confirmation ───
 if [ "${FORCE}" = false ]; then
     echo ""
     warn "This will remove dotclaude global settings from ~/.claude/"
     echo ""
-    echo "The following files will be deleted:"
-    echo "  ~/.claude/CLAUDE.md"
-    echo "  ~/.claude/settings.json"
-    echo "  ~/.claude/MEMORY-example.md"
-    echo "  ~/.claude/.dotclaude-installed"
-    echo "  ~/.claude/commands/dotclaude-init.md"
-    echo "  ~/.claude/commands/dotclaude-update.md"
-    echo "  ~/.claude/scripts/context-monitor.mjs  (legacy)"
-    echo "  ~/.claude/scripts/messenger.sh"
-    echo "  ~/.claude/messenger.json  (Telegram 설정)"
-    echo "  ~/.claude/dist/  (bridge, HUD)"
+    echo "The following will be deleted:"
+    if [ "${HAVE_NODE}" = true ]; then
+        node -e '
+          const fs = require("fs");
+          const m = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+          const dest = process.argv[2];
+          for (const e of m.entries || [])
+            if (e.ownership === "harness" && (e.scope === "global" || e.scope === "both"))
+              console.log("  " + dest + "/" + e.dest);
+          for (const a of m.runtime_artifacts || [])
+            if (a.scope === "global") console.log("  " + dest + "/" + a.path);
+        ' "${INSTALLED_MANIFEST}" "${DOTCLAUDE_DIR}"
+        echo "  ${DOTCLAUDE_DIR}/.dotclaude-installed"
+    else
+        for f in "${FALLBACK_FILES[@]}" "${FALLBACK_DIRS[@]}"; do echo "  ${f}"; done
+        echo "  ${DOTCLAUDE_DIR}/.dotclaude-installed"
+        warn "node/manifest 부재 — 하드코딩 폴백 목록으로 표시됨"
+    fi
     echo ""
     echo "Any other files in ~/.claude/ will be preserved."
     echo ""
@@ -74,38 +110,24 @@ if [ "${FORCE}" = false ]; then
     esac
 fi
 
-# ─── Remove dotclaude files (explicit list only) ───
+# ─── Remove dotclaude files (manifest-driven, node fallback guard) ───
 info "Removing dotclaude files..."
 
-DOTCLAUDE_FILES=(
-    "${DOTCLAUDE_DIR}/CLAUDE.md"
-    "${DOTCLAUDE_DIR}/settings.json"
-    "${DOTCLAUDE_DIR}/MEMORY-example.md"
-    "${DOTCLAUDE_DIR}/.dotclaude-installed"
-    "${DOTCLAUDE_DIR}/commands/dotclaude-init.md"
-    "${DOTCLAUDE_DIR}/commands/dotclaude-update.md"
-    "${DOTCLAUDE_DIR}/scripts/context-monitor.mjs"
-    "${DOTCLAUDE_DIR}/scripts/messenger.sh"
-    "${DOTCLAUDE_DIR}/messenger.json"
-    "${DOTCLAUDE_DIR}/.hud_disabled"
-)
-
-for f in "${DOTCLAUDE_FILES[@]}"; do
-    if [ -f "${f}" ]; then
-        rm -f "${f}"
-        ok "Removed: ${f}"
-    else
-        info "Not found (skipped): ${f}"
-    fi
-done
-
-# ─── Remove dist/ directory ───
-if [ -d "${DOTCLAUDE_DIR}/dist" ]; then
-    rm -rf "${DOTCLAUDE_DIR}/dist"
-    ok "Removed: ${DOTCLAUDE_DIR}/dist/"
+if [ "${HAVE_NODE}" = true ]; then
+    node "${APPLY_MANIFEST}" --uninstall --dest "${DOTCLAUDE_DIR}" --manifest "${INSTALLED_MANIFEST}"
 else
-    info "Not found (skipped): ${DOTCLAUDE_DIR}/dist/"
+    warn "node 또는 manifest 없음 — 하드코딩 최소 폴백 목록으로 삭제합니다."
+    for f in "${FALLBACK_FILES[@]}"; do
+        if [ -e "${f}" ]; then rm -f "${f}"; ok "Removed: ${f}"; else info "Not found (skipped): ${f}"; fi
+    done
+    for d in "${FALLBACK_DIRS[@]}"; do
+        if [ -d "${d}" ]; then rm -rf "${d}"; ok "Removed: ${d}/"; else info "Not found (skipped): ${d}/"; fi
+    done
 fi
+
+# ─── Remove install marker (manifest 에 없는 스탬프 — 명시 삭제) ───
+rm -f "${DOTCLAUDE_DIR}/.dotclaude-installed"
+ok "Removed: ${DOTCLAUDE_DIR}/.dotclaude-installed"
 
 # ─── Clean up empty directories ───
 info "Cleaning up empty directories..."

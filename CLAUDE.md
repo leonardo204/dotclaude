@@ -42,6 +42,7 @@
 - **Hook은 bridge.js 단일 진입점**: 모든 hook(PostToolUse 포함)은 bridge.js를 호출. bash 스크립트 직접 호출 금지 → [Hooks 아키텍처](ref-docs/hooks.md)
 - **Hook stdout 가시성 제약 준수**: `SessionStart`/`UserPromptSubmit`만 컨텍스트 주입 가능. `Stop`은 JSON 프로토콜(`{"decision":"block"}`)만 지원
 - **init/update 명령은 repo clone 방식**: 파일 내용을 기억해서 작성 금지, 반드시 `project-local/`에서 복사
+- **배포 대상은 `manifest.json` 단일 소스**: install/update/uninstall 이 모두 `bin/apply-manifest.mjs` 로 배포한다. 새 배포 대상은 `manifest.json` 엔트리로만 추가 — 스크립트에 복사 목록을 하드코딩하지 말 것(그러면 세 스크립트가 표류한다). 버전 skip 은 `VERSION`+git SHA 기반
 - **Mermaid 다이어그램 작성 시** → [컨벤션](ref-docs/conventions.md) 참조 (괄호 금지, 넘버링 규칙 등)
 
 ### 수정 체크리스트

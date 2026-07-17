@@ -1,0 +1,148 @@
+{
+  "manifestVersion": 1,
+  "_comment": "dotclaude 배포 단일 소스. install.sh / dotclaude-update / uninstall.sh 가 모두 bin/apply-manifest.mjs 를 통해 이 파일을 읽는다. 하드코딩된 복사 목록을 두지 말 것 — 배포 대상이 바뀌면 여기만 고친다.",
+
+  "entries": [
+    {
+      "id": "global-settings",
+      "scope": "global",
+      "src": "global/settings.json",
+      "dest": "settings.json",
+      "policy": "merge-hooks",
+      "ownership": "harness",
+      "note": "hooks 는 repo 최신으로 덮어쓰되 사용자 커스텀 키(enabledPlugins/permissions 등)는 보존. statusLine 은 사용자가 이미 갖고 있거나 .hud_disabled 가 있으면 건드리지 않음."
+    },
+    {
+      "id": "global-claude-md",
+      "scope": "global",
+      "src": "global/CLAUDE.md",
+      "dest": "CLAUDE.md",
+      "policy": "replace-if-unmodified",
+      "ownership": "harness",
+      "note": "사용자가 글로벌 CLAUDE.md 를 손댔으면 덮어쓰지 않고 보존+경고. 판단 근거는 설치 시 기록한 deployed_sha256."
+    },
+    {
+      "id": "global-memory-example",
+      "scope": "global",
+      "src": "global/MEMORY-example.md",
+      "dest": "MEMORY-example.md",
+      "policy": "replace",
+      "ownership": "harness"
+    },
+    {
+      "id": "global-scripts",
+      "scope": "global",
+      "src": "global/scripts/",
+      "dest": "scripts/",
+      "recursive": true,
+      "policy": "replace",
+      "ownership": "harness",
+      "note": "messenger.sh(얇은 래퍼) 등. 래퍼는 dist/messenger/cli.js 를 호출하므로 dist 엔트리와 항상 함께 배포되어야 한다."
+    },
+    {
+      "id": "global-commands",
+      "scope": "global",
+      "src": "global/commands/",
+      "dest": "commands/",
+      "recursive": true,
+      "policy": "replace",
+      "ownership": "harness",
+      "note": "dotclaude-init.md, dotclaude-update.md"
+    },
+    {
+      "id": "global-bin",
+      "scope": "global",
+      "src": "bin/",
+      "dest": "bin/",
+      "recursive": true,
+      "policy": "replace",
+      "ownership": "harness",
+      "required": true,
+      "sentinels": ["apply-manifest.mjs"],
+      "note": "apply-manifest.mjs 자신을 ~/.claude/bin/ 에 배치. uninstall 은 repo 를 clone 하지 않으므로 이 설치본을 호출한다."
+    },
+
+    {
+      "id": "dist",
+      "scope": "both",
+      "src": "project-local/dist/",
+      "dest": "dist/",
+      "recursive": true,
+      "policy": "replace",
+      "ownership": "harness",
+      "required": true,
+      "sentinels": ["hooks/bridge.js", "hud/statusline.js", "messenger/cli.js"],
+      "note": "재귀 복사. hooks/hud/messenger 및 앞으로 추가될 어떤 진입점이든 자동 포함 — 하위목록을 열거하지 않는 것이 messenger 파손 재발 방지의 핵심. sentinels 로 빌드 누락(빈 디렉토리 조용한 no-op)을 hard-fail 처리."
+    },
+
+    {
+      "id": "local-agents",
+      "scope": "local",
+      "src": "project-local/agents/",
+      "dest": "agents/",
+      "recursive": true,
+      "policy": "replace",
+      "ownership": "harness",
+      "note": "cp 오버레이라 프로젝트 고유 에이전트(목록에 없는 파일)는 지우지 않는다. 삭제는 uninstall 만 하며 로컬 스코프는 삭제 대상이 아니다."
+    },
+    {
+      "id": "local-commands",
+      "scope": "local",
+      "src": "project-local/commands/",
+      "dest": "commands/",
+      "recursive": true,
+      "policy": "replace",
+      "ownership": "harness"
+    },
+    {
+      "id": "local-db",
+      "scope": "local",
+      "src": "project-local/db/",
+      "dest": "db/",
+      "recursive": true,
+      "policy": "replace",
+      "ownership": "harness",
+      "note": "init.sql, helper.sh. context.db 는 런타임 생성물이라 src 에 없고 덮어쓰지 않는다."
+    },
+    {
+      "id": "local-scripts",
+      "scope": "local",
+      "src": "project-local/scripts/",
+      "dest": "scripts/",
+      "recursive": true,
+      "policy": "replace",
+      "ownership": "harness"
+    },
+    {
+      "id": "local-workflows",
+      "scope": "local",
+      "src": "project-local/workflows/",
+      "dest": "workflows/",
+      "recursive": true,
+      "policy": "replace",
+      "ownership": "harness",
+      "required": false
+    },
+    {
+      "id": "local-skills",
+      "scope": "local",
+      "src": "project-local/skills/",
+      "dest": "skills/",
+      "recursive": true,
+      "policy": "replace",
+      "ownership": "harness",
+      "required": false
+    }
+  ],
+
+  "runtime_artifacts": [
+    { "path": "channels/", "scope": "global", "note": "channel 플러그인 페어링/토큰 상태 (dotclaude 가 아니라 Claude Code 네이티브가 생성하나, 안내 차원에서 uninstall 시 언급)" },
+    { "path": ".messenger_last_notify", "scope": "global" },
+    { "path": "messenger.log", "scope": "global" },
+    { "path": "messenger.json", "scope": "global", "note": "Telegram 봇 토큰/chat_id" },
+    { "path": ".hud_disabled", "scope": "global" },
+    { "path": ".dotclaude-version", "scope": "global", "note": "로컬 스탬프와 대칭이나 글로벌 스탬프는 .dotclaude-installed 에 흡수되므로 이 경로는 예비" },
+    { "path": ".dotclaude-manifest.json", "scope": "global", "note": "설치 시 배치되는 resolved manifest 자신" },
+    { "path": "scripts/context-monitor.mjs", "scope": "global", "note": "레거시 — 과거 설치본 청소" }
+  ]
+}
