@@ -21,7 +21,24 @@ interface PromptInput {
   db: ContextDB;
 }
 
+/**
+ * 턴 시작 시각을 기록한다. Stop 알림이 이 값으로 "시작/소요/이번 턴 편집 파일 수"를 만든다.
+ *
+ * 구 배선은 이걸 위해 UserPromptSubmit마다 `bash messenger.sh prompt-time &` 를 포크했다
+ * (bash → node → sqlite). 같은 훅에서 이미 DB를 열고 있으므로 여기서 한 줄이면 된다.
+ * 키 이름은 구 구현과 동일하게 유지한다 — 소비처(messenger notify)와의 계약이다.
+ */
+function recordPromptTime(db: ContextDB): void {
+  try {
+    db.liveSet('messenger_prompt_time', String(Math.floor(Date.now() / 1000)));
+  } catch {
+    // 훅 경로 — 실패해도 조용히 넘어간다 (알림의 시각 섹션만 빠진다)
+  }
+}
+
 export async function handlePrompt({ projectRoot, db }: PromptInput): Promise<void> {
+  recordPromptTime(db);
+
   const ctxStatePath = `${projectRoot}/.claude/.ctx_state`;
 
   let ctxState: CtxState = {};

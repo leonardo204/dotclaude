@@ -13,16 +13,18 @@
  *     앞부분이 하드코딩돼 공개 저장소에 커밋돼 있었다(600b560~834abba).
  *     경위는 test/golden/README.md 참조.
  *
- * 이번 단계 범위는 CLI 표면과 전송 코어뿐이다. notify/prompt-time은 bash 동작을
- * 그대로 옮기기만 한다. Stop 훅 통합은 다음 단계다.
+ * notify/prompt-time의 실질 경로는 이제 통합 Stop 훅(hooks/events/stop.ts)과
+ * prompt 훅이다. 두 서브커맨드는 CLI 표면 호환을 위해 남으며, 조립 규칙이
+ * 두 벌 생기지 않도록 본체는 notify.ts에 위임한다.
  */
 
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
-import { configPath, homeDir, readConfig, writeConfig, type MessengerConfig } from './config.js';
+import { ContextDB } from '../shared/db.js';
+import { configPath, readConfig, writeConfig, type MessengerConfig } from './config.js';
 import { escapeHtml, formatDuration, padByte } from './format.js';
+import { nowEpoch, runStopNotify } from './notify.js';
 import { sendMessage } from './telegram.js';
 
 // ─── 색상 (bash 원본과 동일한 시퀀스) ───
@@ -292,8 +294,8 @@ function cmdStatus(): number {
   return 0;
 }
 
-// ─── DB 경로 탐색 (bash find_db 동등) ───
-function findDb(): string | null {
+// ─── 프로젝트 루트 / DB 경로 탐색 (bash find_db 동등) ───
+function findProjectRoot(): string {
   let projRoot = '';
   try {
     projRoot = readFileSync(join(process.cwd(), '.claude/.project_root'), 'utf8').trim();
@@ -310,22 +312,13 @@ function findDb(): string | null {
       // git 저장소 아님
     }
   }
-  if (!projRoot) projRoot = '.';
+  return projRoot || '.';
+}
 
+function findDb(projRoot: string = findProjectRoot()): string | null {
   const db = join(projRoot, '.claude/db/context.db');
   return existsSync(db) ? db : null;
 }
-
-/** epoch(초) → 로컬 시각 문자열. bash `date -r <epoch> "+<fmt>"` 동등. */
-function formatEpoch(epoch: number, withDate: boolean): string {
-  const d = new Date(epoch * 1000);
-  const p = (n: number): string => String(n).padStart(2, '0');
-  const time = `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
-  if (!withDate) return time;
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${time}`;
-}
-
-const nowEpoch = (): number => Math.floor(Date.now() / 1000);
 
 /**
  * bash `read -t 1 -r stdin_data` 동등 — 첫 줄만, 1초 상한.
@@ -363,94 +356,40 @@ async function readStdinLine(timeoutMs = 1000): Promise<string> {
   });
 }
 
-/** scope=project 이면 현재 프로젝트에 .messenger_enabled 가 있어야 한다. */
-function checkScope(scope: string): boolean {
-  if (scope !== 'project') return true;
-  let projRoot = '';
+/**
+ * ─── notify ───
+ *
+ * 실질 경로는 통합 Stop 훅(hooks/events/stop.ts)이다. 이 서브커맨드는 CLI 표면 호환용으로
+ * 남아 있고, 재료 수집·조립·게이트는 전부 notify.ts에 위임한다.
+ *
+ * 구 구현과의 차이 두 가지:
+ *   1) `.reason` 파싱 폐기 — Stop 페이로드에 그런 필드는 **없다**(실측). 늘 'completed' 상수였다.
+ *      진짜 상태는 last_assistant_message에서 온다.
+ *   2) 조립 로직 중복 제거 — 여기에 있던 gatherFacts/checkScope는 notify.ts로 옮겼다.
+ */
+async function cmdNotify(): Promise<number> {
+  const stdinData = await readStdinLine();
+  const projRoot = findProjectRoot();
+  const dbPath = findDb(projRoot);
+
+  let db: ContextDB | null = null;
   try {
-    projRoot = readFileSync(join(process.cwd(), '.claude/.project_root'), 'utf8').trim();
+    if (dbPath) db = new ContextDB(dbPath);
   } catch {
-    // 폴백
+    // DB 없이도 알림은 나간다 (재료 부재는 섹션 생략일 뿐이다)
   }
-  if (!projRoot) {
+
+  let stop = {};
+  if (stdinData) {
     try {
-      projRoot = execFileSync('git', ['rev-parse', '--show-toplevel'], {
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'ignore'],
-      }).trim();
+      stop = JSON.parse(stdinData) as Record<string, unknown>;
     } catch {
-      // 무시
+      // 파싱 실패 — 재료 없이 진행
     }
   }
-  if (!projRoot) projRoot = '.';
-  return existsSync(join(projRoot, '.claude/.messenger_enabled'));
-}
 
-/** notify가 DB에서 긁어오는 값들. */
-interface NotifyFacts {
-  startTimeStr: string;
-  elapsedSec: number;
-  filesCount: string;
-  resultLine: string;
-}
-
-/** bash cmd_notify의 DB 조회부를 그대로 옮긴 것. 실패는 전부 삼킨다. */
-function gatherFacts(dbPath: string): NotifyFacts {
-  const facts: NotifyFacts = { startTimeStr: '', elapsedSec: 0, filesCount: '0', resultLine: '' };
-  let db: DatabaseSync | undefined;
   try {
-    db = new DatabaseSync(dbPath);
-
-    const startRow = db
-      .prepare("SELECT COALESCE(value,'0') AS v FROM live_context WHERE key='messenger_prompt_time'")
-      .get() as { v: string } | undefined;
-    const startEpoch = Number(startRow?.v ?? 0) || 0;
-
-    if (startEpoch > 0) {
-      facts.startTimeStr = formatEpoch(startEpoch, false);
-      facts.elapsedSec = nowEpoch() - startEpoch;
-
-      // prompt 이후 편집된 고유 파일 수
-      const promptDt = formatEpoch(startEpoch, true);
-      const cnt = db
-        .prepare(
-          `SELECT COUNT(DISTINCT file_path) AS n FROM tool_usage
-           WHERE tool_name IN ('Edit','Write')
-             AND file_path IS NOT NULL
-             AND timestamp >= ?`
-        )
-        .get(promptDt) as { n: number } | undefined;
-      facts.filesCount = String(cnt?.n ?? 0);
-    }
-
-    // 결과내용: current_task → key_findings → session_summary → 최근 편집 파일
-    const pick = (key: string): string => {
-      const row = db!
-        .prepare("SELECT value AS v FROM live_context WHERE key=? AND value != '' LIMIT 1")
-        .get(key) as { v: string } | undefined;
-      return row?.v ?? '';
-    };
-    let result = pick('current_task') || pick('key_findings') || pick('session_summary');
-
-    if (!result) {
-      const row = db
-        .prepare(
-          `SELECT GROUP_CONCAT(DISTINCT REPLACE(file_path, RTRIM(file_path, REPLACE(file_path, '/', '')), '')) AS v
-           FROM (SELECT file_path FROM tool_usage
-                 WHERE tool_name IN ('Edit','Write') AND file_path IS NOT NULL
-                 ORDER BY timestamp DESC LIMIT 5)`
-        )
-        .get() as { v: string | null } | undefined;
-      const recent = row?.v ?? '';
-      if (recent) result = `편집: ${recent}`;
-    }
-
-    // 첫 줄만 사용 + 80자 제한
-    result = result.split('\n')[0] ?? '';
-    if (result.length > 80) result = `${result.slice(0, 77)}...`;
-    facts.resultLine = result;
-  } catch {
-    // DB 접근 실패 — 기본값으로 진행 (알림은 보내야 한다)
+    await runStopNotify({ db, projectRoot: projRoot, stop });
   } finally {
     try {
       db?.close();
@@ -458,81 +397,22 @@ function gatherFacts(dbPath: string): NotifyFacts {
       // 무시
     }
   }
-  return facts;
-}
-
-// ─── notify (Stop hook 전용) ───
-async function cmdNotify(): Promise<number> {
-  const cfg = readConfig();
-  if (!cfg) return 0;
-  if (!cfg.bot_token || !cfg.chat_id) return 0;
-  if (!cfg.enabled) return 0;
-
-  // 중복 방지: 마지막 알림 후 30초 이내면 스킵
-  const dedupFile = join(homeDir(), '.claude', '.messenger_last_notify');
-  const now = nowEpoch();
-  try {
-    const last = Number(readFileSync(dedupFile, 'utf8').trim()) || 0;
-    if (now > 0 && last > 0 && now - last < 30) return 0;
-  } catch {
-    // 파일 없음 — 첫 알림
-  }
-  try {
-    writeFileSync(dedupFile, `${now}\n`);
-  } catch {
-    // 무시
-  }
-
-  const stdinData = await readStdinLine();
-  let stopReason = 'completed';
-  if (stdinData) {
-    try {
-      const payload = JSON.parse(stdinData) as { reason?: unknown };
-      if (typeof payload.reason === 'string' && payload.reason) stopReason = payload.reason;
-    } catch {
-      // 파싱 실패 — 기본값 유지
-    }
-  }
-
-  const projectPath = process.cwd();
-  const dbPath = findDb();
-  const facts = dbPath ? gatherFacts(dbPath) : { startTimeStr: '', elapsedSec: 0, filesCount: '0', resultLine: '' };
-
-  // min_duration 체크
-  if (cfg.min_duration > 0 && facts.elapsedSec > 0 && facts.elapsedSec < cfg.min_duration) return 0;
-  // scope 체크
-  if (!checkScope(cfg.scope || 'global')) return 0;
-
-  const durationStr = formatDuration(facts.elapsedSec);
-  const endTime = formatEpoch(nowEpoch(), false);
-  const startTimeStr = facts.startTimeStr || endTime;
-  const resultLine = facts.resultLine || '작업 완료';
-
-  const message = `[dotclaude]
-프로젝트: ${projectPath}
-상태: ${stopReason}
-시작: ${startTimeStr}
-종료: ${endTime}
-소요: ${durationStr}
-파일: ${facts.filesCount}개
-결과: ${resultLine}`;
-
-  // 평문 메시지다 → 통째로 이스케이프해도 서식 손상이 없다.
-  // (구 구현은 이 경로에서 current_task의 '<'/'&' 때문에 400을 맞고 알림을 잃었다)
-  await sendMessage(cfg.bot_token, cfg.chat_id, escapeHtml(message));
   return 0;
 }
 
-// ─── prompt-time (UserPromptSubmit hook 전용) ───
+/**
+ * ─── prompt-time ───
+ *
+ * 실질 경로는 prompt 훅(hooks/events/prompt.ts)이 흡수했다 — 매 턴 bash 포크가 사라졌다.
+ * CLI 표면 호환을 위해 남긴다. 키 이름은 notify와의 계약이므로 그대로다.
+ */
 function cmdPromptTime(): number {
   const dbPath = findDb();
   if (!dbPath) return 0;
-  let db: DatabaseSync | undefined;
+  let db: ContextDB | null = null;
   try {
-    db = new DatabaseSync(dbPath);
-    db.prepare(
-      "INSERT OR REPLACE INTO live_context (key, value, updated_at) VALUES ('messenger_prompt_time', ?, datetime('now','localtime'))"
-    ).run(String(nowEpoch()));
+    db = new ContextDB(dbPath);
+    db.liveSet('messenger_prompt_time', String(nowEpoch()));
   } catch {
     // 훅 경로 — 실패해도 조용히 넘어간다
   } finally {

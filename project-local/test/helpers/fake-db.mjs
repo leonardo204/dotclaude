@@ -74,3 +74,18 @@ export async function captureStdout(fn) {
   }
   return captured;
 }
+
+export async function captureStderr(fn) {
+  const original = process.stderr.write;
+  let captured = '';
+  process.stderr.write = (chunk) => {
+    captured += chunk;
+    return true;
+  };
+  try {
+    await fn();
+  } finally {
+    process.stderr.write = original;
+  }
+  return captured;
+}

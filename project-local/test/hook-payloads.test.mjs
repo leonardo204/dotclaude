@@ -13,8 +13,7 @@ import { readFileSync, mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'nod
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { handleStopRalph } from '../src/hooks/events/stop-ralph.ts';
-import { captureStdout } from './helpers/fake-db.mjs';
+import { evaluateRalphBlock } from '../src/hooks/events/stop-ralph.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -123,52 +122,46 @@ describe('stop-ralph 회귀 (실측 Stop 페이로드 사용)', () => {
     return dir;
   }
 
-  test('활성 + 미완료면 block JSON을 출력한다', async () => {
+  // evaluateRalphBlock은 순수 함수다 — block 여부를 반환만 하고, stdout 출력은
+  // 통합 핸들러(stop.ts)가 담당한다. 여기서는 반환 계약을 검증한다.
+  test('활성 + 미완료면 block 응답을 반환한다', () => {
     const root = setupRalphState({ active: true, status: 'working' });
     const [stop] = loadFixture('stop.jsonl');
 
-    const out = await captureStdout(() =>
-      handleStopRalph({ projectRoot: root, stdinData: JSON.stringify(stop) })
-    );
+    const result = evaluateRalphBlock({ projectRoot: root, stdinData: JSON.stringify(stop) });
 
-    assert.equal(JSON.parse(out).decision, 'block');
+    assert.equal(result?.decision, 'block');
     rmSync(root, { recursive: true, force: true });
   });
 
-  test('stop_hook_active=true면 무한 루프 방지를 위해 차단하지 않는다', async () => {
+  test('stop_hook_active=true면 무한 루프 방지를 위해 null을 반환한다', () => {
     const root = setupRalphState({ active: true, status: 'working' });
     const [stop] = loadFixture('stop.jsonl');
     const payload = { ...stop, stop_hook_active: true };
 
-    const out = await captureStdout(() =>
-      handleStopRalph({ projectRoot: root, stdinData: JSON.stringify(payload) })
-    );
+    const result = evaluateRalphBlock({ projectRoot: root, stdinData: JSON.stringify(payload) });
 
-    assert.equal(out, '');
+    assert.equal(result, null);
     rmSync(root, { recursive: true, force: true });
   });
 
-  test('completed 상태면 차단하지 않는다', async () => {
+  test('completed 상태면 null을 반환한다', () => {
     const root = setupRalphState({ active: true, status: 'completed' });
     const [stop] = loadFixture('stop.jsonl');
 
-    const out = await captureStdout(() =>
-      handleStopRalph({ projectRoot: root, stdinData: JSON.stringify(stop) })
-    );
+    const result = evaluateRalphBlock({ projectRoot: root, stdinData: JSON.stringify(stop) });
 
-    assert.equal(out, '');
+    assert.equal(result, null);
     rmSync(root, { recursive: true, force: true });
   });
 
-  test('.ralph_state가 없으면 아무것도 하지 않는다', async () => {
+  test('.ralph_state가 없으면 null을 반환한다', () => {
     const root = mkdtempSync(join(tmpdir(), 'ralph-none-'));
     const [stop] = loadFixture('stop.jsonl');
 
-    const out = await captureStdout(() =>
-      handleStopRalph({ projectRoot: root, stdinData: JSON.stringify(stop) })
-    );
+    const result = evaluateRalphBlock({ projectRoot: root, stdinData: JSON.stringify(stop) });
 
-    assert.equal(out, '');
+    assert.equal(result, null);
     rmSync(root, { recursive: true, force: true });
   });
 });

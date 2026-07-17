@@ -1,7 +1,9 @@
 /**
- * Stop (세션 통계) 이벤트 핸들러
- * on-stop.sh 기능을 TypeScript로 재현
- * stdout: 디버그 1줄 (또는 0)
+ * Stop (세션 통계) 단계 — 통합 Stop 핸들러(stop.ts)의 1~2단계.
+ * on-stop.sh 기능을 TypeScript로 재현.
+ *
+ * stdout: **아무것도 쓰지 않는다.** Stop 채널의 stdout은 JSON 프로토콜 전용이고
+ * 그 출력은 stop.ts가 단독으로 책임진다. 진단 출력은 stderr로 간다.
  */
 
 import type { ContextDB } from '../../shared/db.js';
@@ -120,6 +122,9 @@ export async function handleStopSession({ db }: StopSessionInput): Promise<void>
     // 무시
   }
 
-  // stdout: 디버그 1줄
-  process.stdout.write(`[hook:on-stop] DB 조회: 세션 #${sessionId} 편집 파일 수\n`);
+  // 진단 출력은 **stderr**로 간다.
+  // 과거 이 줄은 stdout으로 나갔다. Stop의 stdout은 JSON 프로토콜 전용이라
+  // (stop-ralph가 {"decision":"block"}을 내보내는 바로 그 채널이다) 비-JSON을 섞으면 안 된다.
+  // 훅이 별도 프로세스로 나뉘어 있던 동안엔 우연히 무해했을 뿐, 통합된 지금은 곧바로 오염이다.
+  process.stderr.write(`[hook:on-stop] DB 조회: 세션 #${sessionId} 편집 파일 수\n`);
 }

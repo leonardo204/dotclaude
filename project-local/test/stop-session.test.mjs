@@ -9,7 +9,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { handleStopSession, localTimestamp } from '../src/hooks/events/stop-session.ts';
-import { createFakeDB, captureStdout } from './helpers/fake-db.mjs';
+import { createFakeDB, captureStdout, captureStderr } from './helpers/fake-db.mjs';
 
 const TS_FORMAT = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
 
@@ -134,11 +134,18 @@ describe('기존 동작 보존', () => {
     assert.match(handoff.value, /직전 세션 #3/);
   });
 
-  test('디버그 1줄을 stdout에 출력한다', async () => {
+  test('디버그 1줄을 stderr에 출력하고 stdout은 비운다', async () => {
+    // Stop 채널 stdout은 JSON 프로토콜 전용이다. 디버그 텍스트가 섞이면
+    // 통합 핸들러가 내는 {decision:'block'} JSON 파싱이 깨진다(조용한 무력화).
+    // 그래서 디버그 줄은 stderr로 간다.
     const db = createFakeDB({ sessionId: 9, sessionInfo: { id: 9, start_time: localTimestamp() } });
 
-    const out = await captureStdout(() => handleStopSession({ db }));
+    let outText = '';
+    const errText = await captureStderr(async () => {
+      outText = await captureStdout(() => handleStopSession({ db }));
+    });
 
-    assert.match(out, /\[hook:on-stop\] DB 조회: 세션 #9/);
+    assert.match(errText, /\[hook:on-stop\] DB 조회: 세션 #9/);
+    assert.equal(outText, '', 'Stop stdout은 비어 있어야 한다 (JSON 전용 채널)');
   });
 });

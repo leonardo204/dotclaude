@@ -7,8 +7,10 @@
  *   post-edit      → PostToolUse (Edit/Write) 핸들러
  *   post-bash      → PostToolUse (Bash, 성공) 핸들러
  *   post-bash-fail → PostToolUseFailure (Bash, 실패) 핸들러
- *   stop-session   → Stop (세션 통계) 핸들러
- *   stop-ralph     → Stop (ralph persist) 핸들러
+ *   stop           → Stop 통합 핸들러 (세션 통계 → handoff → ralph 판정 → 알림 → JSON)
+ *
+ * Stop은 한때 3개 훅(stop-session / stop-ralph / messenger notify &)으로 나뉘어 있었다.
+ * 같은 이벤트의 훅은 병렬 실행이라 알림이 handoff보다 먼저 읽는 경합이 있었다 → events/stop.ts 참조.
  *
  * 흐름:
  *   stdin 읽기 → HOOK_EVENT 확인 → DB 연결 → 핸들러 실행 → stdout 출력 → DB 닫기
@@ -24,8 +26,7 @@ import { handlePrompt } from './events/prompt.js';
 import { handlePostEdit } from './events/post-edit.js';
 import { handlePostBash } from './events/post-bash.js';
 import { handlePostBashFailure } from './events/post-bash-failure.js';
-import { handleStopSession } from './events/stop-session.js';
-import { handleStopRalph } from './events/stop-ralph.js';
+import { handleStop } from './events/stop.js';
 
 // === 프로젝트 루트 탐색 ===
 function findProjectRoot(): string {
@@ -64,12 +65,6 @@ async function main(): Promise<void> {
   const projectRoot = findProjectRoot();
   const dbPath = join(projectRoot, '.claude/db/context.db');
 
-  // stop-ralph는 DB 없이도 동작 가능
-  if (hookEvent === 'stop-ralph') {
-    await handleStopRalph({ projectRoot, stdinData });
-    return;
-  }
-
   // DB 연결
   let db: ContextDB | null = null;
   try {
@@ -79,7 +74,19 @@ async function main(): Promise<void> {
     }
   } catch (err) {
     process.stderr.write(`[bridge] DB 연결 실패: ${err}\n`);
-    // DB 없으면 조용히 종료 (hook 실패가 Claude 사용을 막으면 안 됨)
+    // DB 없으면 조용히 진행 (hook 실패가 Claude 사용을 막으면 안 됨)
+    db = null;
+  }
+
+  // stop만 DB 없이도 동작해야 한다 — ralph block 판정은 .ralph_state 파일만 보고,
+  // 알림도 DB 재료 없이 나가야 한다(재료 부재는 섹션 생략일 뿐이다).
+  // 나머지 이벤트는 DB가 전부이므로 없으면 할 일이 없다.
+  if (hookEvent === 'stop') {
+    try {
+      await handleStop({ projectRoot, db, stdinData });
+    } finally {
+      db?.close();
+    }
     return;
   }
 
@@ -105,10 +112,6 @@ async function main(): Promise<void> {
 
       case 'post-bash-fail':
         await handlePostBashFailure({ projectRoot, db, stdinData });
-        break;
-
-      case 'stop-session':
-        await handleStopSession({ db });
         break;
 
       default:
