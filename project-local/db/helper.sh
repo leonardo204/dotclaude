@@ -19,6 +19,13 @@ if [ "$_migrated" = "0" ]; then
     sqlite3 "$DB_PATH" "INSERT INTO context_fts(context_fts) VALUES('rebuild');" 2>/dev/null
 fi
 
+# SQL 문자열 리터럴 이스케이프: ' → ''
+#
+# 주의: "${1//\'/\'\'}" 를 쓰면 안 된다. 큰따옴표 안에서 백슬래시는 ' 를 이스케이프하지
+# 않으므로 치환 결과에 백슬래시가 그대로 남아 \'\' 가 되고, SQLite 가
+# "unrecognized token: \" 로 거부한다. 값이 조용히 유실된다.
+_esc() { printf '%s' "${1:-}" | sed "s/'/''/g"; }
+
 CMD="$1"
 shift
 
@@ -35,19 +42,19 @@ case "$CMD" in
     ctx-get)
         # helper.sh ctx-get <key>
         # C1: 회상 시 access_count/last_access_ts 갱신 (decay 재랭킹 신호)
-        sqlite3 "$DB_PATH" "UPDATE context SET access_count=access_count+1, last_access_ts=datetime('now','localtime') WHERE key='$1';" 2>/dev/null
-        sqlite3 "$DB_PATH" "SELECT value FROM context WHERE key='$1' ORDER BY updated_at DESC LIMIT 1;"
+        sqlite3 "$DB_PATH" "UPDATE context SET access_count=access_count+1, last_access_ts=datetime('now','localtime') WHERE key='$(_esc "$1")';" 2>/dev/null
+        sqlite3 "$DB_PATH" "SELECT value FROM context WHERE key='$(_esc "$1")' ORDER BY updated_at DESC LIMIT 1;"
         ;;
     ctx-set)
         # helper.sh ctx-set <key> <value> <category>
-        sqlite3 "$DB_PATH" "INSERT INTO context (key, value, category) VALUES ('$1', '$2', '${3:-general}');"
+        sqlite3 "$DB_PATH" "INSERT INTO context (key, value, category) VALUES ('$(_esc "$1")', '$(_esc "$2")', '$(_esc "${3:-general}")');"
         ;;
     ctx-search)
         # helper.sh ctx-search <keyword>
         # C2: FTS5 전문검색 우선, 실패/무결과 시 LIKE fallback
-        _res=$(sqlite3 -header -column "$DB_PATH" "SELECT c.key, c.value, c.category, c.updated_at FROM context_fts f JOIN context c ON c.id=f.rowid WHERE context_fts MATCH '$1' ORDER BY rank LIMIT 10;" 2>/dev/null)
+        _res=$(sqlite3 -header -column "$DB_PATH" "SELECT c.key, c.value, c.category, c.updated_at FROM context_fts f JOIN context c ON c.id=f.rowid WHERE context_fts MATCH '$(_esc "$1")' ORDER BY rank LIMIT 10;" 2>/dev/null)
         if [ -z "$_res" ]; then
-            _res=$(sqlite3 -header -column "$DB_PATH" "SELECT key, value, category, updated_at FROM context WHERE key LIKE '%$1%' OR value LIKE '%$1%' ORDER BY updated_at DESC LIMIT 10;")
+            _res=$(sqlite3 -header -column "$DB_PATH" "SELECT key, value, category, updated_at FROM context WHERE key LIKE '%$(_esc "$1")%' OR value LIKE '%$(_esc "$1")%' ORDER BY updated_at DESC LIMIT 10;")
         fi
         printf '%s\n' "$_res"
         ;;
@@ -55,7 +62,7 @@ case "$CMD" in
         # helper.sh ctx-list [category]
         if [ -n "$1" ]; then
             # C1: decay 근사 — 자주 회상한 항목 우선, 그다음 최신순
-            sqlite3 -header -column "$DB_PATH" "SELECT key, substr(value,1,80) as value, updated_at FROM context WHERE category='$1' ORDER BY access_count DESC, updated_at DESC;"
+            sqlite3 -header -column "$DB_PATH" "SELECT key, substr(value,1,80) as value, updated_at FROM context WHERE category='$(_esc "$1")' ORDER BY access_count DESC, updated_at DESC;"
         else
             sqlite3 -header -column "$DB_PATH" "SELECT category, COUNT(*) as count FROM context GROUP BY category ORDER BY count DESC;"
         fi
@@ -64,7 +71,7 @@ case "$CMD" in
     # === 태스크 ===
     task-add)
         # helper.sh task-add <description> [priority] [category]
-        sqlite3 "$DB_PATH" "INSERT INTO tasks (description, priority, category) VALUES ('$1', ${2:-3}, '${3:-}');"
+        sqlite3 "$DB_PATH" "INSERT INTO tasks (description, priority, category) VALUES ('$(_esc "$1")', ${2:-3}, '$(_esc "${3:-}")');"
         echo "Task added."
         ;;
     task-list)
@@ -73,7 +80,7 @@ case "$CMD" in
         if [ "$STATUS" = "all" ]; then
             sqlite3 -header -column "$DB_PATH" "SELECT id, status, priority, description, category FROM tasks ORDER BY priority, created_at;"
         else
-            sqlite3 -header -column "$DB_PATH" "SELECT id, priority, description, category FROM tasks WHERE status='$STATUS' ORDER BY priority, created_at;"
+            sqlite3 -header -column "$DB_PATH" "SELECT id, priority, description, category FROM tasks WHERE status='$(_esc "$STATUS")' ORDER BY priority, created_at;"
         fi
         ;;
     task-done)
@@ -83,14 +90,14 @@ case "$CMD" in
         ;;
     task-update)
         # helper.sh task-update <id> <status>
-        sqlite3 "$DB_PATH" "UPDATE tasks SET status='$2' WHERE id=$1;"
+        sqlite3 "$DB_PATH" "UPDATE tasks SET status='$(_esc "$2")' WHERE id=$1;"
         echo "Task #$1 → $2"
         ;;
 
     # === 결정 ===
     decision-add)
         # helper.sh decision-add <description> <reason> [files_json]
-        sqlite3 "$DB_PATH" "INSERT INTO decisions (description, reason, related_files) VALUES ('$1', '$2', '${3:-}');"
+        sqlite3 "$DB_PATH" "INSERT INTO decisions (description, reason, related_files) VALUES ('$(_esc "$1")', '$(_esc "$2")', '$(_esc "${3:-}")');"
         echo "Decision recorded."
         ;;
     decision-list)
@@ -101,7 +108,7 @@ case "$CMD" in
     error-log)
         # helper.sh error-log <error_type> <file_path> [resolution]
         SESSION_ID=$(sqlite3 "$DB_PATH" "SELECT id FROM sessions ORDER BY id DESC LIMIT 1;")
-        sqlite3 "$DB_PATH" "INSERT INTO errors (session_id, error_type, file_path, resolution) VALUES ($SESSION_ID, '$1', '$2', '${3:-}');"
+        sqlite3 "$DB_PATH" "INSERT INTO errors (session_id, error_type, file_path, resolution) VALUES ($SESSION_ID, '$(_esc "$1")', '$(_esc "$2")', '$(_esc "${3:-}")');"
         ;;
     error-list)
         sqlite3 -header -column "$DB_PATH" "SELECT error_type, file_path, resolution, timestamp FROM errors ORDER BY id DESC LIMIT ${1:-10};"
@@ -111,21 +118,21 @@ case "$CMD" in
     commit-log)
         # helper.sh commit-log <hash> <message> [files_json]
         SESSION_ID=$(sqlite3 "$DB_PATH" "SELECT id FROM sessions ORDER BY id DESC LIMIT 1;")
-        sqlite3 "$DB_PATH" "INSERT INTO commits (session_id, hash, message, files_changed) VALUES ($SESSION_ID, '$1', '$2', '${3:-}');"
+        sqlite3 "$DB_PATH" "INSERT INTO commits (session_id, hash, message, files_changed) VALUES ($SESSION_ID, '$(_esc "$1")', '$(_esc "$2")', '$(_esc "${3:-}")');"
         ;;
 
     # === Live Context (compaction-safe) ===
     live-set)
         # helper.sh live-set <key> <value>
-        KEY="${1//\'/\'\'}"
-        VALUE="${2//\'/\'\'}"
+        KEY="$(_esc "$1")"
+        VALUE="$(_esc "$2")"
         sqlite3 "$DB_PATH" "CREATE TABLE IF NOT EXISTS live_context (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime')));"
         sqlite3 "$DB_PATH" "INSERT OR REPLACE INTO live_context (key, value, updated_at) VALUES ('$KEY', '$VALUE', datetime('now','localtime'));"
         ;;
     live-get)
         # helper.sh live-get [key]
         if [ -n "$1" ]; then
-            sqlite3 "$DB_PATH" "SELECT value FROM live_context WHERE key='$1';" 2>/dev/null
+            sqlite3 "$DB_PATH" "SELECT value FROM live_context WHERE key='$(_esc "$1")';" 2>/dev/null
         else
             sqlite3 "$DB_PATH" "SELECT key || ': ' || value FROM live_context ORDER BY key;" 2>/dev/null
         fi
@@ -137,8 +144,8 @@ case "$CMD" in
     live-append)
         # helper.sh live-append <key> <value> [limit]
         # 줄바꿈 구분 리스트에 중복 없이 추가, 최근 N개 제한
-        KEY="${1//\'/\'\'}"
-        VALUE="${2//\'/\'\'}"
+        KEY="$(_esc "$1")"
+        VALUE="$(_esc "$2")"
         LIMIT="${3:-20}"
         sqlite3 "$DB_PATH" "CREATE TABLE IF NOT EXISTS live_context (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime')));"
         EXISTING=$(sqlite3 "$DB_PATH" "SELECT value FROM live_context WHERE key='$KEY';" 2>/dev/null)
@@ -149,7 +156,7 @@ case "$CMD" in
             fi
             # 추가 후 최근 N개만 유지
             UPDATED=$(printf '%s\n%s' "$EXISTING" "$VALUE" | tail -n "$LIMIT")
-            UPDATED_ESC="${UPDATED//\'/\'\'}"
+            UPDATED_ESC="$(_esc "$UPDATED")"
             sqlite3 "$DB_PATH" "INSERT OR REPLACE INTO live_context (key, value, updated_at) VALUES ('$KEY', '$UPDATED_ESC', datetime('now','localtime'));"
         else
             sqlite3 "$DB_PATH" "INSERT OR REPLACE INTO live_context (key, value, updated_at) VALUES ('$KEY', '$VALUE', datetime('now','localtime'));"
@@ -165,11 +172,11 @@ case "$CMD" in
         NAME="$1"
         if [ -n "$2" ]; then
             VALUE="$2"
-            VALUE_ESC="${VALUE//\'/\'\'}"
+            VALUE_ESC="$(_esc "$VALUE")"
             sqlite3 "$DB_PATH" "INSERT OR REPLACE INTO live_context (key, value, updated_at) VALUES ('_task:$NAME', '$VALUE_ESC', datetime('now','localtime'));"
         elif [ ! -t 0 ]; then
             VALUE=$(cat)
-            VALUE_ESC="${VALUE//\'/\'\'}"
+            VALUE_ESC="$(_esc "$VALUE")"
             sqlite3 "$DB_PATH" "INSERT OR REPLACE INTO live_context (key, value, updated_at) VALUES ('_task:$NAME', '$VALUE_ESC', datetime('now','localtime'));"
         else
             sqlite3 "$DB_PATH" "SELECT value FROM live_context WHERE key='_task:$NAME';" 2>/dev/null
@@ -180,11 +187,11 @@ case "$CMD" in
         NAME="$1"
         if [ -n "$2" ]; then
             VALUE="$2"
-            VALUE_ESC="${VALUE//\'/\'\'}"
+            VALUE_ESC="$(_esc "$VALUE")"
             sqlite3 "$DB_PATH" "INSERT OR REPLACE INTO live_context (key, value, updated_at) VALUES ('_result:$NAME', '$VALUE_ESC', datetime('now','localtime'));"
         elif [ ! -t 0 ]; then
             VALUE=$(cat)
-            VALUE_ESC="${VALUE//\'/\'\'}"
+            VALUE_ESC="$(_esc "$VALUE")"
             sqlite3 "$DB_PATH" "INSERT OR REPLACE INTO live_context (key, value, updated_at) VALUES ('_result:$NAME', '$VALUE_ESC', datetime('now','localtime'));"
         else
             sqlite3 "$DB_PATH" "SELECT value FROM live_context WHERE key='_result:$NAME';" 2>/dev/null
@@ -195,11 +202,11 @@ case "$CMD" in
         KEY="$1"
         if [ -n "$2" ]; then
             VALUE="$2"
-            VALUE_ESC="${VALUE//\'/\'\'}"
+            VALUE_ESC="$(_esc "$VALUE")"
             sqlite3 "$DB_PATH" "INSERT OR REPLACE INTO live_context (key, value, updated_at) VALUES ('_ctx:$KEY', '$VALUE_ESC', datetime('now','localtime'));"
         elif [ ! -t 0 ]; then
             VALUE=$(cat)
-            VALUE_ESC="${VALUE//\'/\'\'}"
+            VALUE_ESC="$(_esc "$VALUE")"
             sqlite3 "$DB_PATH" "INSERT OR REPLACE INTO live_context (key, value, updated_at) VALUES ('_ctx:$KEY', '$VALUE_ESC', datetime('now','localtime'));"
         else
             sqlite3 "$DB_PATH" "SELECT value FROM live_context WHERE key='_ctx:$KEY';" 2>/dev/null
@@ -219,7 +226,7 @@ case "$CMD" in
     tool-log)
         # helper.sh tool-log <tool_name> <file_path>
         SESSION_ID=$(sqlite3 "$DB_PATH" "SELECT id FROM sessions ORDER BY id DESC LIMIT 1;")
-        sqlite3 "$DB_PATH" "INSERT INTO tool_usage (session_id, tool_name, file_path) VALUES ($SESSION_ID, '$1', '$2');" 2>/dev/null
+        sqlite3 "$DB_PATH" "INSERT INTO tool_usage (session_id, tool_name, file_path) VALUES ($SESSION_ID, '$(_esc "$1")', '$(_esc "$2")');" 2>/dev/null
         ;;
 
     # === 통계 ===
