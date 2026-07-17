@@ -295,22 +295,36 @@ HUD는 Claude Code가 statusline에 직접 주는 stdin 데이터(rate limit·�
 
 ---
 
-### 📱 Telegram 메신저 알림
+### 📱 Telegram 메신저 알림 (발신 특화)
 
-Claude Code 작업이 완료되면 **Telegram**으로 알림을 받을 수 있습니다. 장시간 작업(모델 학습, 대규모 리팩토링 등)을 걸어두고 다른 일을 할 때 유용합니다.
-
-> 현재 **Telegram만** 지원합니다.
+Claude Code 작업이 끝나면 **Telegram**으로 프로젝트 컨텍스트가 담긴 알림을 받습니다. 장시간 작업을 걸어두고 자리를 비웠을 때, 무엇이 끝났고 얼마나 썼고 다음에 뭘 볼지를 한눈에 확인할 수 있습니다.
 
 ```
-[dotclaude]
-프로젝트: /home/user/my-project
-상태: end_turn
-시작: 14:30:15
-종료: 15:45:22
-소요: 1시간 15분
+[dotclaude] 세션 종료
+프로젝트: /home/user/my-project (main)
+상태: 응답 완료 — 백그라운드 1건 진행 중
+시간: 14:30:15 → 15:45:22 (1시간 15분)
 파일: 8개
-결과: MLOps 자동 반복 학습 구현
+비용: 오늘 $11.14 / 누적 $90.28
+한도: 5시간 2% · 7일 14%
+
+요약
+<Claude의 마지막 응답 첫 문단>
+
+백그라운드 (1건)
+- [running] subagent/planner — ...
+
+핸드오프
+<편집 파일 + 최근 결정 요약>
 ```
+
+비용·레이트리밋·브랜치·커밋·핸드오프·백그라운드 작업은 **네이티브 알림이 담지 못하는 dotclaude 고유 정보**입니다. 재료가 없으면 해당 줄만 생략하고 알림은 보냅니다.
+
+> **양방향(폰에서 지시·승인)은 이 기능이 아니라 Claude Code 네이티브를 쓰세요.**
+> dotclaude 메신저는 **발신 전용**입니다. 폰에서 세션을 조종하거나 권한을 원격 승인하려면
+> Claude Code의 [Channels](https://code.claude.com/docs/en/channels)(공식 Telegram 플러그인,
+> 양방향 챗브릿지 + permission relay)나 [Remote Control](https://code.claude.com/docs/en/remote-control)을
+> 사용합니다 — 둘 다 매 세션 `--channels` / `--remote-control` 옵션으로 옵트인합니다.
 
 **설정 방법**:
 
