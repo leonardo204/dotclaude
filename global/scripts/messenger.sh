@@ -41,7 +41,7 @@ show_help() {
     echo "설정 파일: ${CONFIG_FILE}"
     echo ""
     echo "예시:"
-    echo "  messenger.sh config 8714774691:AAE3eebo... 36737902"
+    echo "  messenger.sh config 123456789:AAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx 987654321"
     echo "  messenger.sh test"
     echo "  messenger.sh send \"빌드 완료!\""
     echo "  messenger.sh set min_duration 300"
