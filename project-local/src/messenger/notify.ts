@@ -120,6 +120,31 @@ export function clip(text: string, max: number): string {
   return t.length <= max ? t : `${t.slice(0, max - 1)}…`;
 }
 
+/**
+ * last_assistant_message에서 알림용 요약을 뽑는다.
+ *
+ * 문제: last_assistant_message는 마크다운 원문이라 코드블록·불릿·표를 통째로
+ * 담으면 알림이 장황해진다(실측: 코드펜스 여러 개가 그대로 들어감). 네이티브
+ * 푸시가 못 하는 "프로젝트 컨텍스트"가 목적이지 응답 전문 복붙이 목적이 아니다.
+ *
+ * 그래서 코드블록을 걷어내고, 첫 산문 문단만 취해 마크다운 기호를 정리한다.
+ */
+export function summarize(text: string, max: number): string {
+  // 1) 코드펜스(``` … ```) 블록 제거
+  let t = text.replace(/```[\s\S]*?```/g, ' ').replace(/```[\s\S]*$/g, ' ');
+  // 2) 문단 경계로 나눠 첫 "산문" 문단을 고른다 — 헤더/불릿/인용/표로만 된 건 건너뛴다
+  const paras = t.split(/\n\s*\n/).map((p) => p.trim());
+  const prose = paras.find((p) => p && !/^[#>|\-*\d.]/.test(p)) ?? paras.find((p) => p) ?? '';
+  // 3) 인라인 마크다운 기호 정리: **강조**·`코드`·[링크](url) → 텍스트만
+  t = prose
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return clip(t, max);
+}
+
 // ─── 재료: 비용 ───
 
 interface CostEntry {
@@ -274,7 +299,7 @@ export function gatherFacts({ db, projectRoot, stop, home = homeDir(), tag }: Ga
   // last_assistant_message instead of reading the transcript".
   // (구 구현이 파싱하던 `.reason` 필드는 실측상 **존재하지 않는다** — 상수 'completed'였다)
   if (typeof stop.last_assistant_message === 'string') {
-    facts.summary = clip(stop.last_assistant_message, SUMMARY_MAX);
+    facts.summary = summarize(stop.last_assistant_message, SUMMARY_MAX);
   }
   if (Array.isArray(stop.background_tasks)) {
     facts.backgroundTasks = stop.background_tasks;

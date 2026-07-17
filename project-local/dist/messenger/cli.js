@@ -517,6 +517,13 @@ function clip(text, max) {
   const t = text.trim();
   return t.length <= max ? t : `${t.slice(0, max - 1)}\u2026`;
 }
+function summarize(text, max) {
+  let t = text.replace(/```[\s\S]*?```/g, " ").replace(/```[\s\S]*$/g, " ");
+  const paras = t.split(/\n\s*\n/).map((p) => p.trim());
+  const prose = paras.find((p) => p && !/^[#>|\-*\d.]/.test(p)) ?? paras.find((p) => p) ?? "";
+  t = prose.replace(/`([^`]+)`/g, "$1").replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\[([^\]]+)\]\([^)]*\)/g, "$1").replace(/\s+/g, " ").trim();
+  return clip(t, max);
+}
 function costCachePath(home) {
   return join4(home, ".claude", ".hud_cost_cache.json");
 }
@@ -608,7 +615,7 @@ function gatherFacts({ db, projectRoot, stop, home = homeDir(), tag }) {
   facts.cost = loadCost(projectRoot, home);
   facts.rateLimit = loadRateLimit(home);
   if (typeof stop.last_assistant_message === "string") {
-    facts.summary = clip(stop.last_assistant_message, SUMMARY_MAX);
+    facts.summary = summarize(stop.last_assistant_message, SUMMARY_MAX);
   }
   if (Array.isArray(stop.background_tasks)) {
     facts.backgroundTasks = stop.background_tasks;

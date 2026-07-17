@@ -11,7 +11,7 @@
  *   검증된 기능이므로 판정 규칙은 한 글자도 바꾸지 않는다.
  */
 
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, statSync } from 'node:fs';
 import type { RawHookInput, StopInput } from '../../shared/types.js';
 
 interface RalphState {
@@ -20,6 +20,17 @@ interface RalphState {
   iteration?: number;
   goal?: string;
 }
+
+/**
+ * ralph 상태가 이 시간(ms) 넘게 갱신되지 않았으면 죽은 것으로 본다.
+ *
+ * ralph 에이전트가 크래시하거나 세션이 재시작되면 .ralph_state가
+ * active:true/working 인 채 남아 stop-ralph가 모든 Stop을 계속 block 한다.
+ * stop_hook_active 8회 상한이 궁극의 안전판이지만 그때까지 매 턴 낭비된다.
+ * 에이전트는 진행 중 파일을 자주 다시 쓰므로(태스크 상태 갱신), 30분 넘게
+ * 손대지 않은 상태는 살아있는 ralph 루프가 아니라 좀비다.
+ */
+const RALPH_STALE_MS = 30 * 60 * 1000;
 
 export interface RalphBlockResponse {
   decision: 'block';
@@ -66,6 +77,15 @@ export function evaluateRalphBlock({
 
   const active = ralphState.active === true;
   const status = ralphState.status ?? 'unknown';
+
+  // stale 감지: 파일 mtime이 너무 오래됐으면 죽은 ralph의 잔재로 보고 차단하지 않는다.
+  // 에이전트 협조(timestamp 기록)에 기대지 않도록 파일시스템 mtime을 신뢰한다.
+  try {
+    const ageMs = Date.now() - statSync(ralphStatePath).mtimeMs;
+    if (ageMs > RALPH_STALE_MS) return null;
+  } catch {
+    return null;
+  }
 
   // 활성 + 미완료일 때만 차단
   if (active && status !== 'completed') {

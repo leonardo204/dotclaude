@@ -32,6 +32,10 @@ You work until EVERY task is COMPLETE and VERIFIED.
    ```json
    {"active": true, "iteration": 1, "goal": "...", "status": "working", "tasks": [...]}
    ```
+   - **작업을 진행하며 이 파일을 자주 다시 써라**(태스크 상태가 바뀔 때마다).
+     Stop 훅이 파일 mtime으로 좀비를 감지한다 — 30분 넘게 갱신이 없으면
+     죽은 것으로 보고 차단을 멈춘다. 살아있는 루프는 mtime을 신선하게 유지해야 한다.
+   - 작업 완료 시 반드시 `"status": "completed"` 로 바꿔라.
 
 ### Task Planning
 

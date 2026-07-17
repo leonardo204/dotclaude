@@ -9,7 +9,7 @@
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
+import { readFileSync, mkdtempSync, writeFileSync, mkdirSync, rmSync, utimesSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -162,6 +162,31 @@ describe('stop-ralph 회귀 (실측 Stop 페이로드 사용)', () => {
     const result = evaluateRalphBlock({ projectRoot: root, stdinData: JSON.stringify(stop) });
 
     assert.equal(result, null);
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  test('stale 상태(30분+ 미갱신)는 활성이어도 차단하지 않는다', () => {
+    // 크래시/세션 재시작으로 남은 좀비 상태 재현: active:true 인데 파일이 오래됨.
+    const root = setupRalphState({ active: true, status: 'working' });
+    const statePath = join(root, '.claude', '.ralph_state');
+    const old = new Date(Date.now() - 31 * 60 * 1000);
+    utimesSync(statePath, old, old);
+    const [stop] = loadFixture('stop.jsonl');
+
+    const result = evaluateRalphBlock({ projectRoot: root, stdinData: JSON.stringify(stop) });
+
+    assert.equal(result, null, 'stale 좀비 상태는 Stop을 막지 않아야 한다');
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  test('갓 갱신된 활성 상태는 정상 차단한다(회귀)', () => {
+    // stale 로직이 살아있는 ralph 루프까지 죽이지 않는지 확인.
+    const root = setupRalphState({ active: true, status: 'working' });
+    const [stop] = loadFixture('stop.jsonl');
+
+    const result = evaluateRalphBlock({ projectRoot: root, stdinData: JSON.stringify(stop) });
+
+    assert.equal(result?.decision, 'block');
     rmSync(root, { recursive: true, force: true });
   });
 });
