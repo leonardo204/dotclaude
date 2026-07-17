@@ -118,6 +118,11 @@ var MAX_LIFETIME_MS = 24 * 60 * 60 * 1e3;
 var USAGE_API_URL = "https://api.anthropic.com/api/oauth/usage";
 var SIGNAL_COOLDOWN_MS = 60 * 1e3;
 var _lastSignalFetch = 0;
+function isUsageInfoFresh(info) {
+  if (!info) return false;
+  if (!info.resets_at) return true;
+  return new Date(info.resets_at).getTime() > Date.now();
+}
 function writePid() {
   try {
     writeFileSync2(PID_FILE, String(process.pid));
@@ -140,7 +145,8 @@ function isAlreadyRunning() {
       try {
         process.kill(pid, "SIGUSR1");
         console.log(`[fetcher] sent SIGUSR1 to running process (pid: ${pid})`);
-      } catch {}
+      } catch {
+      }
       return true;
     } catch {
       removePid();
@@ -171,8 +177,8 @@ async function fetchUsage() {
     const stale = {
       _ts: Date.now(),
       _ok: false,
-      ...existing2?.five_hour ? { five_hour: existing2.five_hour } : {},
-      ...existing2?.seven_day ? { seven_day: existing2.seven_day } : {}
+      ...isUsageInfoFresh(existing2?.five_hour) ? { five_hour: existing2.five_hour } : {},
+      ...isUsageInfoFresh(existing2?.seven_day) ? { seven_day: existing2.seven_day } : {}
     };
     saveCache(stale);
     return;
@@ -194,8 +200,8 @@ async function fetchUsage() {
         _ok: false,
         _rateLimited: true,
         _rlCount: rlCount,
-        ...existing?.five_hour ? { five_hour: existing.five_hour } : {},
-        ...existing?.seven_day ? { seven_day: existing.seven_day } : {}
+        ...isUsageInfoFresh(existing?.five_hour) ? { five_hour: existing.five_hour } : {},
+        ...isUsageInfoFresh(existing?.seven_day) ? { seven_day: existing.seven_day } : {}
       });
       console.error(`[fetcher] rate limited (count: ${rlCount})`);
       return;
@@ -215,16 +221,16 @@ async function fetchUsage() {
     saveCache({
       _ts: Date.now(),
       _ok: false,
-      ...existing?.five_hour ? { five_hour: existing.five_hour } : {},
-      ...existing?.seven_day ? { seven_day: existing.seven_day } : {}
+      ...isUsageInfoFresh(existing?.five_hour) ? { five_hour: existing.five_hour } : {},
+      ...isUsageInfoFresh(existing?.seven_day) ? { seven_day: existing.seven_day } : {}
     });
     console.error("[fetcher] API returned unexpected response:", JSON.stringify(data));
   } catch (err) {
     saveCache({
       _ts: Date.now(),
       _ok: false,
-      ...existing?.five_hour ? { five_hour: existing.five_hour } : {},
-      ...existing?.seven_day ? { seven_day: existing.seven_day } : {}
+      ...isUsageInfoFresh(existing?.five_hour) ? { five_hour: existing.five_hour } : {},
+      ...isUsageInfoFresh(existing?.seven_day) ? { seven_day: existing.seven_day } : {}
     });
     console.error("[fetcher] network error:", err instanceof Error ? err.message : String(err));
   }
