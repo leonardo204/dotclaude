@@ -57,7 +57,7 @@ Agent B: helper.sh agent-context <key> → DB에서 조회
 | planner | 요청 분석 → 태스크 분해 + 수용 기준 정의 | opus | high | ❌ |
 | architect | 설계/구현 검토 + 아키텍처 타당성 검증 | opus | high | ❌ |
 | ralph | 끈질긴 구현 — 완료+검증될 때까지 절대 중단 안 함 | opus | high | ✅ |
-| verifier | 빌드/테스트/타입체크 증거 기반 검증 | sonnet | low | ❌ |
+| verifier | 빌드/테스트/타입체크 증거 기반 검증 | haiku | low | ❌ |
 | reviewer | 코드 리뷰 — 보안/정확성/품질 | opus | high | ❌ |
 | debugger | 버그/에러 근본 원인 진단 | opus | high | ❌ |
 | test-engineer | 테스트 전략 수립 + 테스트 코드 작성 | sonnet | medium | ✅ |
@@ -119,28 +119,24 @@ Workflow 스크립트는 파일시스템/Bash 접근이 없다(`agent()`만 가�
 
 → Workflow는 세션 **내** 조율, Context DB는 세션 **간** 영속 — 상보적으로 결합한다.
 
-## 모델·effort 배정 원칙 (Opus 4.8 기준)
+## 모델·effort 배정 원칙 (Fable 5 시대)
 
-모델은 추론 깊이·비용으로, effort는 노력 수준(토큰 소비)으로 — 두 축을 조합해 배정한다.
+모델은 추론 깊이·비용으로 배정한다. effort는 **서브에이전트 스코프에서 독립 존중되지 않으므로**(아래 실측 참조) 세션 레벨에서 제어한다.
+
+**모델 라인업** (2026-06 Fable 5 출시 후): Fable 5(`claude-fable-5`, $10/$50, 최강·long-horizon) → Opus 4.8(`claude-opus-4-8`, $5/$25, SOTA 추론) → Sonnet 5(`claude-sonnet-5`, $3/$15, 대부분 코딩) → Haiku 4.5(`claude-haiku-4-5`, $1/$5, 단순·고속). alias `opus`→Opus 4.8, `sonnet`→Sonnet 5로 자동 해석된다.
 
 | 모델 | 적합한 역할 | 이유 |
 |------|------------|------|
-| opus | 계획, 설계 검토, 코드 리뷰, 근본 원인 진단, long-horizon 구현 | 깊은 추론, 적응형 사고. 4.8의 long-context·도구 트리거 개선으로 장기 구현(ralph)에도 적합 |
-| sonnet | 테스트 작성, 빌드/테스트 검증 | 도구 호출 빈도가 높거나 단순한 실행에 비용 효율적. effort로 노력 수준 제어 |
-
-| effort | 적합한 역할 | 배정 에이전트 |
-|--------|------------|--------------|
-| high | 깊은 추론·판단, 장기 구현 (서브에이전트 최대 권장값) | planner, architect, reviewer, debugger, ralph |
-| medium | 균형형 실행 | test-engineer |
-| low | 단순 실행+판정 | verifier |
+| fable | **며칠짜리 자율 빌드**(진짜 long-horizon) | 자기검증·장기 자율성. 단 단가 2배 + 거부분류기/fallback 필요 → 정말 긴 자율 작업에만 선택적으로 |
+| opus | 계획, 설계 검토, 코드 리뷰, 근본 원인 진단, 장기 구현(ralph) | 깊은 추론. 단발 강추론엔 Fable 프리미엄이 낭비 — Opus 4.8이 SOTA이자 반값 |
+| sonnet | 테스트 작성 | 경계된 실코딩에 비용 효율적 |
+| haiku | 빌드/테스트/타입체크 pass/fail 확인(verifier) | 기계적 판정이라 지능 민감도 낮음 → 최저가·고속 |
 
 배정 판단 기준:
-- **추론 깊이가 핵심**이면 opus — 하나의 정확한 판단이 중요한 역할
-- **장기 구현·에이전틱**이면 opus + high — 4.8 long-horizon 개선의 수혜 (fewer compactions, better tool triggering)
-- **도구 호출 빈도가 높거나 단순**하면 sonnet — effort로 비용을 조절
-- **effort는 노력 수준 제어**: 분석·장기 구현 `high`, 균형 `medium`, 단순 판정 `low`
-- ⚠️ **서브에이전트 frontmatter effort는 `low/medium/high/max`만 유효** — `xhigh`는 세션/API 레벨 값(ultracode 보고용)이라 서브에이전트 스코프에선 무시될 수 있다. 장기 구현도 `high`를 쓴다
-- ⚠️ **haiku는 effort 파라미터 미지원** — 노력 제어가 필요하면 sonnet + low로 배정 (verifier가 이 경우)
+- **추론 깊이가 핵심**이면 opus — 하나의 정확한 판단이 중요한 단발 역할
+- **Fable로 올릴 가치**는 "반복하며 스스로 빌드/테스트를 통과시키는" 장기 자율 역할(ralph)뿐 — 그마저 비용 급증이라 기본은 Opus 4.8, 진짜 며칠짜리 작업에만 수동 승격
+- **기계적 판정·단순 실행**이면 haiku — verifier가 이 경우(비용/속도 이득)
+- ⚠️ **effort frontmatter는 서브에이전트에서 독립 존중되지 않는다 (실측).** 같은 추론 태스크를 `xhigh`/opus 에이전트와 `low`/haiku 에이전트에 돌려 비교했더니 thinking 토큰이 사실상 동일(13.8k vs 14.2k)했다 — 네이티브 서브에이전트는 frontmatter effort가 아니라 **메인 세션의 thinking을 상속**한다. `.md`의 `effort:`는 의도 표기일 뿐, **깊은 사고가 필요하면 파이프라인을 돌리기 전에 세션 effort를 올려라**(`/effort high` 등). model 배정은 반영되는 것으로 관측됨(모델 교체는 속도·비용에 실효).
 - ⚠️ **토큰 부담 인지**: opus 다중 위임은 서브에이전트당 오버헤드 + 누적 비용이 크다. 한 번의 `/dotclaude-implement`가 주간 한도를 크게 소모할 수 있으니 — 소규모 작업은 수동 위임/직접 처리로, ralph 반복 상한(최대 10회)을 인지한다. 비용이 민감하면 planner/reviewer를 sonnet으로 내리는 것도 고려
 
 ## 에이전트 프롬프트 공통 원칙

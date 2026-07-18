@@ -15,7 +15,7 @@
 - 메인 컨텍스트는 판단 + 위임. 실행은 Agent에 맡긴다
 - 필수 Agent: 파일 3개+, 멀티스텝 5+, 복잡한 구현, 코드베이스 탐색(Explore), 장시간 작업(background)
 - 직접 처리: 단일 파일, 특정 검색, 즉답, 1-2단계 작업
-- 커스텀 에이전트: `subagent_type`에 에이전트명 직접 지정 (네이티브 subagent, Opus 4.8)
+- 커스텀 에이전트: `subagent_type`에 에이전트명 직접 지정 (네이티브 subagent, 모델은 에이전트별 배정 → agent-delegation.md)
 - 파이프라인: planner → architect → ralph + test-engineer → verifier → reviewer
 - 파이프라인 자동 트리거: 새 기능+2파일 이상 / 아키텍처 변경 / "구현해줘"+구체적 명세
 - Workflow(대규모·opt-in): agentType으로 에이전트 오케스트레이션 — "workflow"/"ultracode" 명시 시만
