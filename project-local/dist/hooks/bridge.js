@@ -28,22 +28,6 @@ var ContextDB = class {
       this.db.exec(sql);
     } catch {
     }
-    try {
-      const col = this.db.prepare(
-        "SELECT COUNT(*) AS n FROM pragma_table_info('context') WHERE name='access_count'"
-      ).get();
-      if (col.n === 0) {
-        this.db.exec("ALTER TABLE context ADD COLUMN last_access_ts TEXT");
-        this.db.exec(
-          "ALTER TABLE context ADD COLUMN access_count INTEGER NOT NULL DEFAULT 0"
-        );
-        try {
-          this.db.exec("INSERT INTO context_fts(context_fts) VALUES('rebuild')");
-        } catch {
-        }
-      }
-    } catch {
-    }
   }
   // === 세션 ===
   /** 새 세션을 삽입하고 생성된 id를 반환한다. */
@@ -124,75 +108,6 @@ var ContextDB = class {
   /** live_context에서 key를 삭제한다. */
   liveClear() {
     this.db.exec("DELETE FROM live_context");
-  }
-  // === Context (key-value store) ===
-  ctxGet(key) {
-    try {
-      this.db.prepare(
-        "UPDATE context SET access_count = access_count + 1, last_access_ts = datetime('now','localtime') WHERE key = ?"
-      ).run(key);
-    } catch {
-    }
-    const stmt = this.db.prepare(
-      "SELECT value FROM context WHERE key = ? ORDER BY updated_at DESC LIMIT 1"
-    );
-    const row = stmt.get(key);
-    return row?.value ?? null;
-  }
-  ctxSet(key, value, category = "general") {
-    const stmt = this.db.prepare(
-      "INSERT INTO context (key, value, category) VALUES (?, ?, ?)"
-    );
-    stmt.run(key, value, category);
-  }
-  ctxList(category) {
-    if (category) {
-      const stmt2 = this.db.prepare(
-        "SELECT * FROM context WHERE category = ? ORDER BY access_count DESC, updated_at DESC"
-      );
-      return stmt2.all(category);
-    }
-    const stmt = this.db.prepare(
-      "SELECT * FROM context ORDER BY access_count DESC, updated_at DESC"
-    );
-    return stmt.all();
-  }
-  // === Tasks ===
-  /** 태스크를 추가하고 생성된 id를 반환한다. */
-  taskAdd(description, priority = 3, category = "") {
-    const stmt = this.db.prepare(
-      "INSERT INTO tasks (description, priority, category) VALUES (?, ?, ?)"
-    );
-    const result = stmt.run(description, priority, category);
-    return Number(result.lastInsertRowid);
-  }
-  /** 태스크 목록을 조회한다. status 미지정 시 'pending'. */
-  taskList(status) {
-    const s = status ?? "pending";
-    if (s === "all") {
-      const stmt2 = this.db.prepare(
-        "SELECT * FROM tasks ORDER BY priority, created_at"
-      );
-      return stmt2.all();
-    }
-    const stmt = this.db.prepare(
-      "SELECT * FROM tasks WHERE status = ? ORDER BY priority, created_at"
-    );
-    return stmt.all(s);
-  }
-  /** 태스크를 완료 처리한다. */
-  taskDone(id) {
-    const stmt = this.db.prepare(
-      "UPDATE tasks SET status='done', completed_at=datetime('now','localtime') WHERE id = ?"
-    );
-    stmt.run(id);
-  }
-  /** 태스크 상태를 임의 값으로 업데이트한다. */
-  taskUpdate(id, status) {
-    const stmt = this.db.prepare(
-      "UPDATE tasks SET status = ? WHERE id = ?"
-    );
-    stmt.run(status, id);
   }
   // === Decisions ===
   /** 결정을 기록하고 생성된 id를 반환한다. */
@@ -285,7 +200,6 @@ var ContextDB = class {
     };
     return {
       sessions: count("SELECT COUNT(*) AS n FROM sessions"),
-      tasks: count("SELECT COUNT(*) AS n FROM tasks WHERE status='pending'"),
       decisions: count("SELECT COUNT(*) AS n FROM decisions"),
       errors: count("SELECT COUNT(*) AS n FROM errors"),
       tool_usage: count("SELECT COUNT(*) AS n FROM tool_usage"),
@@ -308,14 +222,6 @@ var ContextDB = class {
       "SELECT COUNT(DISTINCT file_path) AS n FROM tool_usage WHERE session_id = ?"
     );
     const row = stmt.get(sessionId);
-    return row?.n ?? 0;
-  }
-  /** pending/in_progress 태스크 수를 반환한다. */
-  pendingTaskCount() {
-    const stmt = this.db.prepare(
-      "SELECT COUNT(*) AS n FROM tasks WHERE status IN ('pending','in_progress')"
-    );
-    const row = stmt.get();
     return row?.n ?? 0;
   }
   /** 특정 세션에서 최근 편집된 파일 경로 목록을 반환한다. */
@@ -455,20 +361,6 @@ async function handleSessionStart({ projectRoot, db }) {
   if (diffHours >= 24) {
     out.push(`[checkin] Last session: ${lastSessionTime} (${diffHours}h ago - LONG BREAK)`);
     out.push("[checkin] Action needed: full briefing recommended");
-    try {
-      const pendingRows = db.query(
-        "SELECT COUNT(*) AS n FROM tasks WHERE status IN ('pending','in_progress')"
-      );
-      const pending = pendingRows[0]?.n ?? 0;
-      if (pending > 0) {
-        out.push(`[checkin] Pending tasks: ${pending}`);
-        const taskRows = db.query(
-          "SELECT '  - [' || status || '] ' || description AS line FROM tasks WHERE status IN ('pending','in_progress') ORDER BY priority LIMIT 5"
-        );
-        for (const r of taskRows) out.push(r.line);
-      }
-    } catch {
-    }
   } else if (diffHours >= 4) {
     out.push(`[checkin] Last session: ${lastSessionTime} (${diffHours}h ago - moderate break)`);
     out.push("[checkin] Quick sync recommended");
@@ -480,17 +372,6 @@ async function handleSessionStart({ projectRoot, db }) {
     if (handoff) {
       out.push("");
       out.push(handoff);
-    }
-  } catch {
-  }
-  try {
-    const idxRows = db.query(
-      `SELECT category, GROUP_CONCAT(key, ', ') AS keys FROM (SELECT category, key FROM context ORDER BY access_count DESC, updated_at DESC) GROUP BY category`
-    );
-    if (idxRows.length > 0) {
-      out.push("");
-      out.push("[memory] context \uC778\uB371\uC2A4 (\uC0C1\uC138: helper.sh ctx-get <key>):");
-      for (const r of idxRows) out.push(`  [${r.category}] ${r.keys}`);
     }
   } catch {
   }
@@ -550,9 +431,8 @@ async function handlePrompt({ projectRoot, db }) {
       };
       writeFileSync2(ctxStatePath, JSON.stringify(newState2));
       const sessionEdits = getSessionEdits(db, sessionId);
-      const pendingTasks = getPendingCount(db);
       process.stdout.write(
-        `[ctx] Session #${sessionId} | Edits: ${sessionEdits} files | Pending tasks: ${pendingTasks}
+        `[ctx] Session #${sessionId} | Edits: ${sessionEdits} files
 [rules] \uD55C\uAD6D\uC5B4 \xB7 verify \xB7 agent\u22653 \xB7 live-set \xB7 no-commit
 `
       );
@@ -580,17 +460,6 @@ async function handlePrompt({ projectRoot, db }) {
       if (decisions.length > 0) {
         out.push("[ctx-restore] Recent decisions:");
         for (const r of decisions) out.push(r.line);
-      }
-    } catch {
-    }
-    try {
-      const pendingCount = getPendingCount(db);
-      if (pendingCount > 0) {
-        const tasks = db.query(
-          "SELECT '  - [P' || priority || '][' || status || '] ' || description AS line FROM tasks WHERE status IN ('pending','in_progress') ORDER BY priority"
-        );
-        out.push(`[ctx-restore] Pending tasks (${pendingCount}):`);
-        for (const r of tasks) out.push(r.line);
       }
     } catch {
     }
@@ -630,9 +499,8 @@ async function handlePrompt({ projectRoot, db }) {
     );
   } else {
     const sessionEdits = getSessionEdits(db, sessionId);
-    const pendingTasks = getPendingCount(db);
     process.stdout.write(
-      `[ctx] Session #${sessionId} | Edits: ${sessionEdits} files | Pending tasks: ${pendingTasks}
+      `[ctx] Session #${sessionId} | Edits: ${sessionEdits} files
 [rules] \uD55C\uAD6D\uC5B4 \xB7 verify \xB7 agent\u22653 \xB7 live-set \xB7 no-commit
 `
     );
@@ -641,13 +509,6 @@ async function handlePrompt({ projectRoot, db }) {
 function getSessionEdits(db, sessionId) {
   try {
     return db.sessionEditCount(sessionId);
-  } catch {
-    return 0;
-  }
-}
-function getPendingCount(db) {
-  try {
-    return db.pendingTaskCount();
   } catch {
     return 0;
   }
@@ -1315,13 +1176,6 @@ async function handleStopSession({ db }) {
     );
     if (decisionRows.length > 0) {
       parts.push(`  - \uCD5C\uADFC \uACB0\uC815: ${decisionRows.map((r) => r.description).join(" / ")}`);
-    }
-    const taskRows = db.query(
-      "SELECT '    - [' || status || '] ' || description AS line FROM tasks WHERE status IN ('pending','in_progress') ORDER BY priority LIMIT 5"
-    );
-    if (taskRows.length > 0) {
-      parts.push(`  - \uBBF8\uC644\uB8CC \uD0DC\uC2A4\uD06C ${taskRows.length}\uAC74:`);
-      for (const r of taskRows) parts.push(r.line);
     }
     if (parts.length > 0) {
       db.liveSet(

@@ -53,7 +53,6 @@
 |-----------|------------|
 | `global/CLAUDE.md` | → `~/.claude/CLAUDE.md` |
 | `global/commands/*.md` | → `~/.claude/commands/` |
-| `project-local/hooks/*.sh` | 레거시 — settings.json에서 미참조. bridge.js 내부 로직만 사용 |
 | `project-local/settings.json` | hooks 섹션은 `global/settings.json`과 동일하게 유지 (statusLine만 다름) |
 | `project-local/scripts/messenger.sh` | 얇은 래퍼 — `dist/messenger/cli.js` 호출. → `global/scripts/` + `.claude/scripts/` + `~/.claude/scripts/`. 본체는 `src/messenger/*.ts` |
 | `project-local/agents/*.md` | → `.claude/agents/` (init/update가 복사) |

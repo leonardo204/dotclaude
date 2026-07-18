@@ -28,22 +28,6 @@ var ContextDB = class {
       this.db.exec(sql);
     } catch {
     }
-    try {
-      const col = this.db.prepare(
-        "SELECT COUNT(*) AS n FROM pragma_table_info('context') WHERE name='access_count'"
-      ).get();
-      if (col.n === 0) {
-        this.db.exec("ALTER TABLE context ADD COLUMN last_access_ts TEXT");
-        this.db.exec(
-          "ALTER TABLE context ADD COLUMN access_count INTEGER NOT NULL DEFAULT 0"
-        );
-        try {
-          this.db.exec("INSERT INTO context_fts(context_fts) VALUES('rebuild')");
-        } catch {
-        }
-      }
-    } catch {
-    }
   }
   // === 세션 ===
   /** 새 세션을 삽입하고 생성된 id를 반환한다. */
@@ -124,75 +108,6 @@ var ContextDB = class {
   /** live_context에서 key를 삭제한다. */
   liveClear() {
     this.db.exec("DELETE FROM live_context");
-  }
-  // === Context (key-value store) ===
-  ctxGet(key) {
-    try {
-      this.db.prepare(
-        "UPDATE context SET access_count = access_count + 1, last_access_ts = datetime('now','localtime') WHERE key = ?"
-      ).run(key);
-    } catch {
-    }
-    const stmt = this.db.prepare(
-      "SELECT value FROM context WHERE key = ? ORDER BY updated_at DESC LIMIT 1"
-    );
-    const row = stmt.get(key);
-    return row?.value ?? null;
-  }
-  ctxSet(key, value, category = "general") {
-    const stmt = this.db.prepare(
-      "INSERT INTO context (key, value, category) VALUES (?, ?, ?)"
-    );
-    stmt.run(key, value, category);
-  }
-  ctxList(category) {
-    if (category) {
-      const stmt2 = this.db.prepare(
-        "SELECT * FROM context WHERE category = ? ORDER BY access_count DESC, updated_at DESC"
-      );
-      return stmt2.all(category);
-    }
-    const stmt = this.db.prepare(
-      "SELECT * FROM context ORDER BY access_count DESC, updated_at DESC"
-    );
-    return stmt.all();
-  }
-  // === Tasks ===
-  /** 태스크를 추가하고 생성된 id를 반환한다. */
-  taskAdd(description, priority = 3, category = "") {
-    const stmt = this.db.prepare(
-      "INSERT INTO tasks (description, priority, category) VALUES (?, ?, ?)"
-    );
-    const result = stmt.run(description, priority, category);
-    return Number(result.lastInsertRowid);
-  }
-  /** 태스크 목록을 조회한다. status 미지정 시 'pending'. */
-  taskList(status) {
-    const s = status ?? "pending";
-    if (s === "all") {
-      const stmt2 = this.db.prepare(
-        "SELECT * FROM tasks ORDER BY priority, created_at"
-      );
-      return stmt2.all();
-    }
-    const stmt = this.db.prepare(
-      "SELECT * FROM tasks WHERE status = ? ORDER BY priority, created_at"
-    );
-    return stmt.all(s);
-  }
-  /** 태스크를 완료 처리한다. */
-  taskDone(id) {
-    const stmt = this.db.prepare(
-      "UPDATE tasks SET status='done', completed_at=datetime('now','localtime') WHERE id = ?"
-    );
-    stmt.run(id);
-  }
-  /** 태스크 상태를 임의 값으로 업데이트한다. */
-  taskUpdate(id, status) {
-    const stmt = this.db.prepare(
-      "UPDATE tasks SET status = ? WHERE id = ?"
-    );
-    stmt.run(status, id);
   }
   // === Decisions ===
   /** 결정을 기록하고 생성된 id를 반환한다. */
@@ -285,7 +200,6 @@ var ContextDB = class {
     };
     return {
       sessions: count("SELECT COUNT(*) AS n FROM sessions"),
-      tasks: count("SELECT COUNT(*) AS n FROM tasks WHERE status='pending'"),
       decisions: count("SELECT COUNT(*) AS n FROM decisions"),
       errors: count("SELECT COUNT(*) AS n FROM errors"),
       tool_usage: count("SELECT COUNT(*) AS n FROM tool_usage"),
@@ -308,14 +222,6 @@ var ContextDB = class {
       "SELECT COUNT(DISTINCT file_path) AS n FROM tool_usage WHERE session_id = ?"
     );
     const row = stmt.get(sessionId);
-    return row?.n ?? 0;
-  }
-  /** pending/in_progress 태스크 수를 반환한다. */
-  pendingTaskCount() {
-    const stmt = this.db.prepare(
-      "SELECT COUNT(*) AS n FROM tasks WHERE status IN ('pending','in_progress')"
-    );
-    const row = stmt.get();
     return row?.n ?? 0;
   }
   /** 특정 세션에서 최근 편집된 파일 경로 목록을 반환한다. */

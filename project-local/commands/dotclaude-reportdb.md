@@ -16,20 +16,11 @@ sqlite3 -header -column .claude/db/context.db "SELECT id, start_time, end_time, 
 # 커밋 이력 (최근 15개)
 sqlite3 -header -column .claude/db/context.db "SELECT hash, message, timestamp FROM commits ORDER BY id DESC LIMIT 15;"
 
-# 미완료 태스크
-sqlite3 -header -column .claude/db/context.db "SELECT id, priority, status, description, category FROM tasks WHERE status IN ('pending','in_progress') ORDER BY priority;"
-
-# 완료 태스크 (최근 10개)
-sqlite3 -header -column .claude/db/context.db "SELECT id, description, completed_at FROM tasks WHERE status='done' ORDER BY completed_at DESC LIMIT 10;"
-
 # 설계 결정 이력
 sqlite3 -header -column .claude/db/context.db "SELECT id, date, description, reason, status FROM decisions ORDER BY id DESC LIMIT 10;"
 
 # 에러 로그 (최근 10개)
 sqlite3 -header -column .claude/db/context.db "SELECT error_type, file_path, resolution, timestamp FROM errors ORDER BY id DESC LIMIT 10;"
-
-# 컨텍스트 항목 (카테고리별 집계)
-sqlite3 -header -column .claude/db/context.db "SELECT category, COUNT(*) as count FROM context GROUP BY category ORDER BY count DESC;"
 
 # Live Context (현재 상태)
 bash .claude/db/helper.sh live-dump
@@ -47,17 +38,13 @@ sqlite3 -header -column .claude/db/context.db "SELECT file_path, COUNT(*) as cou
 ## Context DB Report
 
 ### 통계 요약
-- 세션: N회 | 커밋: N건 | 태스크: N(완료)/N(미완료) | 에러: N건
+- 세션: N회 | 커밋: N건 | 에러: N건
 
 ### 세션 이력
 (테이블)
 
 ### 커밋 이력
 (테이블)
-
-### 태스크
-- 미완료: (목록)
-- 최근 완료: (목록)
 
 ### 설계 결정
 (목록)

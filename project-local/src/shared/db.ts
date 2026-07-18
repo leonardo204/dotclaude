@@ -4,9 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import type {
   SessionInfo,
-  Task,
   Decision,
-  ContextEntry,
   ErrorEntry,
   DBStats,
 } from './types.js';
@@ -32,32 +30,11 @@ export class ContextDB {
     const sqlPath =
       initSqlPath ?? join(__dirname, '../../db/init.sql');
     const sql = readFileSync(sqlPath, 'utf8');
-    // FTS5 미지원 빌드 등에서 일부 statement가 실패해도 핵심 테이블은 생성되도록 보호
+    // 일부 statement가 실패해도 핵심 테이블은 생성되도록 보호
     try {
       this.db.exec(sql);
     } catch {
-      // 부분 실패 — 아래 멱등 마이그레이션과 코드 fallback에 위임
-    }
-    // 멱등 마이그레이션 (schema 1.1 → 1.2): 기존 DB에 누락된 decay 컬럼 보강
-    try {
-      const col = this.db
-        .prepare(
-          "SELECT COUNT(*) AS n FROM pragma_table_info('context') WHERE name='access_count'"
-        )
-        .get() as { n: number };
-      if (col.n === 0) {
-        this.db.exec('ALTER TABLE context ADD COLUMN last_access_ts TEXT');
-        this.db.exec(
-          'ALTER TABLE context ADD COLUMN access_count INTEGER NOT NULL DEFAULT 0'
-        );
-        try {
-          this.db.exec("INSERT INTO context_fts(context_fts) VALUES('rebuild')");
-        } catch {
-          // FTS5 미지원 — LIKE fallback 사용
-        }
-      }
-    } catch {
-      // 무시
+      // 부분 실패 — helper.sh 의 멱등 마이그레이션에 위임
     }
   }
 
@@ -153,89 +130,6 @@ export class ContextDB {
   /** live_context에서 key를 삭제한다. */
   liveClear(): void {
     this.db.exec('DELETE FROM live_context');
-  }
-
-  // === Context (key-value store) ===
-
-  ctxGet(key: string): string | null {
-    // C1: 회상 시 decay 신호(access_count/last_access_ts) 갱신
-    try {
-      this.db
-        .prepare(
-          "UPDATE context SET access_count = access_count + 1, last_access_ts = datetime('now','localtime') WHERE key = ?"
-        )
-        .run(key);
-    } catch {
-      // 컬럼 미마이그레이션 시 무시
-    }
-    const stmt = this.db.prepare(
-      'SELECT value FROM context WHERE key = ? ORDER BY updated_at DESC LIMIT 1'
-    );
-    const row = stmt.get(key) as { value: string } | undefined;
-    return row?.value ?? null;
-  }
-
-  ctxSet(key: string, value: string, category = 'general'): void {
-    const stmt = this.db.prepare(
-      'INSERT INTO context (key, value, category) VALUES (?, ?, ?)'
-    );
-    stmt.run(key, value, category);
-  }
-
-  ctxList(category?: string): ContextEntry[] {
-    // C1: decay 근사 — 자주 회상한 항목 우선, 그다음 최신순
-    if (category) {
-      const stmt = this.db.prepare(
-        'SELECT * FROM context WHERE category = ? ORDER BY access_count DESC, updated_at DESC'
-      );
-      return stmt.all(category) as unknown as ContextEntry[];
-    }
-    const stmt = this.db.prepare(
-      'SELECT * FROM context ORDER BY access_count DESC, updated_at DESC'
-    );
-    return stmt.all() as unknown as ContextEntry[];
-  }
-
-  // === Tasks ===
-
-  /** 태스크를 추가하고 생성된 id를 반환한다. */
-  taskAdd(description: string, priority = 3, category = ''): number {
-    const stmt = this.db.prepare(
-      'INSERT INTO tasks (description, priority, category) VALUES (?, ?, ?)'
-    );
-    const result = stmt.run(description, priority, category);
-    return Number(result.lastInsertRowid);
-  }
-
-  /** 태스크 목록을 조회한다. status 미지정 시 'pending'. */
-  taskList(status?: string): Task[] {
-    const s = status ?? 'pending';
-    if (s === 'all') {
-      const stmt = this.db.prepare(
-        'SELECT * FROM tasks ORDER BY priority, created_at'
-      );
-      return stmt.all() as unknown as Task[];
-    }
-    const stmt = this.db.prepare(
-      "SELECT * FROM tasks WHERE status = ? ORDER BY priority, created_at"
-    );
-    return stmt.all(s) as unknown as Task[];
-  }
-
-  /** 태스크를 완료 처리한다. */
-  taskDone(id: number): void {
-    const stmt = this.db.prepare(
-      "UPDATE tasks SET status='done', completed_at=datetime('now','localtime') WHERE id = ?"
-    );
-    stmt.run(id);
-  }
-
-  /** 태스크 상태를 임의 값으로 업데이트한다. */
-  taskUpdate(id: number, status: string): void {
-    const stmt = this.db.prepare(
-      'UPDATE tasks SET status = ? WHERE id = ?'
-    );
-    stmt.run(status, id);
   }
 
   // === Decisions ===
@@ -356,7 +250,6 @@ export class ContextDB {
 
     return {
       sessions: count('SELECT COUNT(*) AS n FROM sessions'),
-      tasks: count("SELECT COUNT(*) AS n FROM tasks WHERE status='pending'"),
       decisions: count('SELECT COUNT(*) AS n FROM decisions'),
       errors: count('SELECT COUNT(*) AS n FROM errors'),
       tool_usage: count('SELECT COUNT(*) AS n FROM tool_usage'),
@@ -384,15 +277,6 @@ export class ContextDB {
       'SELECT COUNT(DISTINCT file_path) AS n FROM tool_usage WHERE session_id = ?'
     );
     const row = stmt.get(sessionId) as { n: number } | undefined;
-    return row?.n ?? 0;
-  }
-
-  /** pending/in_progress 태스크 수를 반환한다. */
-  pendingTaskCount(): number {
-    const stmt = this.db.prepare(
-      "SELECT COUNT(*) AS n FROM tasks WHERE status IN ('pending','in_progress')"
-    );
-    const row = stmt.get() as { n: number } | undefined;
     return row?.n ?? 0;
   }
 

@@ -1,5 +1,5 @@
 -- Wander Project Context DB Schema
--- Version: 1.0
+-- Version: 1.3
 
 -- 작업 세션 기록
 CREATE TABLE IF NOT EXISTS sessions (
@@ -13,20 +13,6 @@ CREATE TABLE IF NOT EXISTS sessions (
     commits_made INTEGER DEFAULT 0
 );
 
--- 프로젝트 컨텍스트 (key-value)
-CREATE TABLE IF NOT EXISTS context (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    key TEXT NOT NULL,
-    value TEXT NOT NULL,
-    category TEXT NOT NULL DEFAULT 'general',  -- architecture, decision, feature, bug, ...
-    created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
-    updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
-    last_access_ts TEXT,                          -- C1: decay 재랭킹용 마지막 회상 시각
-    access_count INTEGER NOT NULL DEFAULT 0        -- C1: decay 재랭킹용 회상 횟수
-);
-CREATE INDEX IF NOT EXISTS idx_context_category ON context(category);
-CREATE INDEX IF NOT EXISTS idx_context_key ON context(key);
-
 -- 설계 결정 이력
 CREATE TABLE IF NOT EXISTS decisions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -36,18 +22,6 @@ CREATE TABLE IF NOT EXISTS decisions (
     related_files TEXT,  -- JSON array of file paths
     status TEXT DEFAULT 'active'  -- active, superseded, reverted
 );
-
--- 할일/태스크
-CREATE TABLE IF NOT EXISTS tasks (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    description TEXT NOT NULL,
-    priority INTEGER DEFAULT 3,  -- 1=urgent, 2=high, 3=normal, 4=low
-    status TEXT DEFAULT 'pending',  -- pending, in_progress, done, cancelled
-    category TEXT,
-    created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
-    completed_at TEXT
-);
-CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
 
 -- 도구 사용 로그 (discover 분석용)
 CREATE TABLE IF NOT EXISTS tool_usage (
@@ -61,16 +35,6 @@ CREATE TABLE IF NOT EXISTS tool_usage (
 CREATE INDEX IF NOT EXISTS idx_tool_usage_tool ON tool_usage(tool_name);
 CREATE INDEX IF NOT EXISTS idx_tool_usage_file ON tool_usage(file_path);
 CREATE INDEX IF NOT EXISTS idx_tool_usage_session ON tool_usage(session_id);
-
--- 사용자 프롬프트 로그 (discover 패턴 분석용)
-CREATE TABLE IF NOT EXISTS prompts (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id INTEGER,
-    content_hash TEXT NOT NULL,  -- 프라이버시: 내용 대신 해시 저장
-    keyword_tags TEXT,  -- JSON array: ["commit", "fix", "build"] 등 추출 키워드
-    timestamp TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
-    FOREIGN KEY (session_id) REFERENCES sessions(id)
-);
 
 -- 에러/이슈 로그 (discover 패턴 분석용)
 CREATE TABLE IF NOT EXISTS errors (
@@ -103,27 +67,10 @@ CREATE TABLE IF NOT EXISTS live_context (
     updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
 );
 
--- C2: context 전문검색 (FTS5). external-content 패턴 — context 테이블과 트리거로 동기화.
--- FTS5 미지원 빌드에서는 이 블록이 실패할 수 있으므로, 코드(db.ts/helper.sh)에서
--- try-catch 후 LIKE fallback 하도록 한다. (sqlite3 CLI/macOS는 기본 FTS5 포함)
-CREATE VIRTUAL TABLE IF NOT EXISTS context_fts USING fts5(
-    key, value, content='context', content_rowid='id'
-);
-CREATE TRIGGER IF NOT EXISTS context_fts_ai AFTER INSERT ON context BEGIN
-    INSERT INTO context_fts(rowid, key, value) VALUES (new.id, new.key, new.value);
-END;
-CREATE TRIGGER IF NOT EXISTS context_fts_ad AFTER DELETE ON context BEGIN
-    INSERT INTO context_fts(context_fts, rowid, key, value) VALUES ('delete', old.id, old.key, old.value);
-END;
-CREATE TRIGGER IF NOT EXISTS context_fts_au AFTER UPDATE ON context BEGIN
-    INSERT INTO context_fts(context_fts, rowid, key, value) VALUES ('delete', old.id, old.key, old.value);
-    INSERT INTO context_fts(rowid, key, value) VALUES (new.id, new.key, new.value);
-END;
-
 -- DB 메타 정보
 CREATE TABLE IF NOT EXISTS db_meta (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
-INSERT OR REPLACE INTO db_meta (key, value) VALUES ('schema_version', '1.2');
+INSERT OR REPLACE INTO db_meta (key, value) VALUES ('schema_version', '1.3');
 INSERT OR REPLACE INTO db_meta (key, value) VALUES ('created_at', datetime('now', 'localtime'));

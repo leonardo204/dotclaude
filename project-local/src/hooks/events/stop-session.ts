@@ -105,13 +105,6 @@ export async function handleStopSession({ db }: StopSessionInput): Promise<void>
     if (decisionRows.length > 0) {
       parts.push(`  - 최근 결정: ${decisionRows.map((r) => r.description).join(' / ')}`);
     }
-    const taskRows = db.query(
-      "SELECT '    - [' || status || '] ' || description AS line FROM tasks WHERE status IN ('pending','in_progress') ORDER BY priority LIMIT 5"
-    ) as Array<{ line: string }>;
-    if (taskRows.length > 0) {
-      parts.push(`  - 미완료 태스크 ${taskRows.length}건:`);
-      for (const r of taskRows) parts.push(r.line);
-    }
     if (parts.length > 0) {
       db.liveSet(
         'session_handoff',

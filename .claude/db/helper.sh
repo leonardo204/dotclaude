@@ -9,14 +9,29 @@ INIT_SQL="$PROJECT_ROOT/.claude/db/init.sql"
 # DB 없으면 초기화
 [ ! -f "$DB_PATH" ] && sqlite3 "$DB_PATH" < "$INIT_SQL"
 
-# 경량 멱등 마이그레이션 (schema 1.1 → 1.2): access_count 컬럼 존재를 완료 플래그로 사용.
-# 미존재 시에만 1회 ALTER + init.sql 재실행(FTS/트리거 멱등 보강) + FTS 백필.
-_migrated=$(sqlite3 "$DB_PATH" "SELECT COUNT(*) FROM pragma_table_info('context') WHERE name='access_count';" 2>/dev/null)
-if [ "$_migrated" = "0" ]; then
-    sqlite3 "$DB_PATH" "ALTER TABLE context ADD COLUMN last_access_ts TEXT;" 2>/dev/null
-    sqlite3 "$DB_PATH" "ALTER TABLE context ADD COLUMN access_count INTEGER NOT NULL DEFAULT 0;" 2>/dev/null
-    sqlite3 "$DB_PATH" < "$INIT_SQL" 2>/dev/null
-    sqlite3 "$DB_PATH" "INSERT INTO context_fts(context_fts) VALUES('rebuild');" 2>/dev/null
+# 멱등 마이그레이션 (schema 1.2 → 1.3): 죽은 테이블 제거.
+# tasks/context 는 네이티브 대체(TodoWrite/auto-memory)로 write 경로가 죽었고,
+# prompts/context_fts 는 삽입 경로가 없어 항상 비어 있다.
+# 데이터 보호: tasks/context 는 0행일 때만 DROP(만약의 사용자 데이터 보존).
+#   prompts/context_fts(+동기화 트리거)는 무조건 DROP IF EXISTS.
+# schema_version=1.3 을 완료 플래그로 사용해 1회만 수행(멱등).
+_schema=$(sqlite3 "$DB_PATH" "SELECT value FROM db_meta WHERE key='schema_version';" 2>/dev/null)
+if [ "$_schema" != "1.3" ]; then
+    # context_fts 동기화 트리거 + 가상테이블 (삽입 경로 없음 — 항상 빔).
+    # context 테이블보다 먼저 제거해야 content-table 링크 오류가 없다.
+    sqlite3 "$DB_PATH" "DROP TRIGGER IF EXISTS context_fts_ai;" 2>/dev/null
+    sqlite3 "$DB_PATH" "DROP TRIGGER IF EXISTS context_fts_ad;" 2>/dev/null
+    sqlite3 "$DB_PATH" "DROP TRIGGER IF EXISTS context_fts_au;" 2>/dev/null
+    sqlite3 "$DB_PATH" "DROP TABLE IF EXISTS context_fts;" 2>/dev/null
+    # prompts (유령 — 삽입 코드 0)
+    sqlite3 "$DB_PATH" "DROP TABLE IF EXISTS prompts;" 2>/dev/null
+    # tasks / context 는 0행 가드 후에만 DROP (데이터 손실 방지)
+    _tasks_n=$(sqlite3 "$DB_PATH" "SELECT COUNT(*) FROM tasks;" 2>/dev/null)
+    [ "$_tasks_n" = "0" ] && sqlite3 "$DB_PATH" "DROP TABLE IF EXISTS tasks;" 2>/dev/null
+    _context_n=$(sqlite3 "$DB_PATH" "SELECT COUNT(*) FROM context;" 2>/dev/null)
+    [ "$_context_n" = "0" ] && sqlite3 "$DB_PATH" "DROP TABLE IF EXISTS context;" 2>/dev/null
+    # schema_version 갱신 (db_meta 는 init.sql 로 항상 존재)
+    sqlite3 "$DB_PATH" "INSERT OR REPLACE INTO db_meta (key, value) VALUES ('schema_version', '1.3');" 2>/dev/null
 fi
 
 # SQL 문자열 리터럴 이스케이프: ' → ''
@@ -36,62 +51,6 @@ case "$CMD" in
         ;;
     session-info)
         sqlite3 -header -column "$DB_PATH" "SELECT * FROM sessions ORDER BY id DESC LIMIT ${1:-5};"
-        ;;
-
-    # === 컨텍스트 ===
-    ctx-get)
-        # helper.sh ctx-get <key>
-        # C1: 회상 시 access_count/last_access_ts 갱신 (decay 재랭킹 신호)
-        sqlite3 "$DB_PATH" "UPDATE context SET access_count=access_count+1, last_access_ts=datetime('now','localtime') WHERE key='$(_esc "$1")';" 2>/dev/null
-        sqlite3 "$DB_PATH" "SELECT value FROM context WHERE key='$(_esc "$1")' ORDER BY updated_at DESC LIMIT 1;"
-        ;;
-    ctx-set)
-        # helper.sh ctx-set <key> <value> <category>
-        sqlite3 "$DB_PATH" "INSERT INTO context (key, value, category) VALUES ('$(_esc "$1")', '$(_esc "$2")', '$(_esc "${3:-general}")');"
-        ;;
-    ctx-search)
-        # helper.sh ctx-search <keyword>
-        # C2: FTS5 전문검색 우선, 실패/무결과 시 LIKE fallback
-        _res=$(sqlite3 -header -column "$DB_PATH" "SELECT c.key, c.value, c.category, c.updated_at FROM context_fts f JOIN context c ON c.id=f.rowid WHERE context_fts MATCH '$(_esc "$1")' ORDER BY rank LIMIT 10;" 2>/dev/null)
-        if [ -z "$_res" ]; then
-            _res=$(sqlite3 -header -column "$DB_PATH" "SELECT key, value, category, updated_at FROM context WHERE key LIKE '%$(_esc "$1")%' OR value LIKE '%$(_esc "$1")%' ORDER BY updated_at DESC LIMIT 10;")
-        fi
-        printf '%s\n' "$_res"
-        ;;
-    ctx-list)
-        # helper.sh ctx-list [category]
-        if [ -n "$1" ]; then
-            # C1: decay 근사 — 자주 회상한 항목 우선, 그다음 최신순
-            sqlite3 -header -column "$DB_PATH" "SELECT key, substr(value,1,80) as value, updated_at FROM context WHERE category='$(_esc "$1")' ORDER BY access_count DESC, updated_at DESC;"
-        else
-            sqlite3 -header -column "$DB_PATH" "SELECT category, COUNT(*) as count FROM context GROUP BY category ORDER BY count DESC;"
-        fi
-        ;;
-
-    # === 태스크 ===
-    task-add)
-        # helper.sh task-add <description> [priority] [category]
-        sqlite3 "$DB_PATH" "INSERT INTO tasks (description, priority, category) VALUES ('$(_esc "$1")', ${2:-3}, '$(_esc "${3:-}")');"
-        echo "Task added."
-        ;;
-    task-list)
-        # helper.sh task-list [status]
-        STATUS="${1:-pending}"
-        if [ "$STATUS" = "all" ]; then
-            sqlite3 -header -column "$DB_PATH" "SELECT id, status, priority, description, category FROM tasks ORDER BY priority, created_at;"
-        else
-            sqlite3 -header -column "$DB_PATH" "SELECT id, priority, description, category FROM tasks WHERE status='$(_esc "$STATUS")' ORDER BY priority, created_at;"
-        fi
-        ;;
-    task-done)
-        # helper.sh task-done <id>
-        sqlite3 "$DB_PATH" "UPDATE tasks SET status='done', completed_at=datetime('now','localtime') WHERE id=$1;"
-        echo "Task #$1 marked done."
-        ;;
-    task-update)
-        # helper.sh task-update <id> <status>
-        sqlite3 "$DB_PATH" "UPDATE tasks SET status='$(_esc "$2")' WHERE id=$1;"
-        echo "Task #$1 → $2"
         ;;
 
     # === 결정 ===
@@ -141,31 +100,6 @@ case "$CMD" in
         # helper.sh live-dump (formatted for context injection)
         sqlite3 "$DB_PATH" "SELECT '- ' || key || ': ' || value FROM live_context ORDER BY key;" 2>/dev/null
         ;;
-    live-append)
-        # helper.sh live-append <key> <value> [limit]
-        # 줄바꿈 구분 리스트에 중복 없이 추가, 최근 N개 제한
-        KEY="$(_esc "$1")"
-        VALUE="$(_esc "$2")"
-        LIMIT="${3:-20}"
-        sqlite3 "$DB_PATH" "CREATE TABLE IF NOT EXISTS live_context (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime')));"
-        EXISTING=$(sqlite3 "$DB_PATH" "SELECT value FROM live_context WHERE key='$KEY';" 2>/dev/null)
-        if [ -n "$EXISTING" ]; then
-            # 중복 확인
-            if echo "$EXISTING" | grep -Fxq "$VALUE"; then
-                exit 0
-            fi
-            # 추가 후 최근 N개만 유지
-            UPDATED=$(printf '%s\n%s' "$EXISTING" "$VALUE" | tail -n "$LIMIT")
-            UPDATED_ESC="$(_esc "$UPDATED")"
-            sqlite3 "$DB_PATH" "INSERT OR REPLACE INTO live_context (key, value, updated_at) VALUES ('$KEY', '$UPDATED_ESC', datetime('now','localtime'));"
-        else
-            sqlite3 "$DB_PATH" "INSERT OR REPLACE INTO live_context (key, value, updated_at) VALUES ('$KEY', '$VALUE', datetime('now','localtime'));"
-        fi
-        ;;
-    live-clear)
-        sqlite3 "$DB_PATH" "DELETE FROM live_context;" 2>/dev/null
-        echo "Live context cleared."
-        ;;
 
     # === Agent 핸드오프 ===
     agent-task)
@@ -213,15 +147,6 @@ case "$CMD" in
         fi
         ;;
 
-    agent-cleanup)
-        NAME="$1"
-        sqlite3 "$DB_PATH" "DELETE FROM live_context WHERE key LIKE '_task:$NAME' OR key LIKE '_result:$NAME';"
-        ;;
-
-    agent-list)
-        sqlite3 -header -column "$DB_PATH" "SELECT key, length(value) as bytes, updated_at FROM live_context WHERE key LIKE '_task:%' OR key LIKE '_result:%' OR key LIKE '_ctx:%' ORDER BY key;"
-        ;;
-
     # === 도구 사용 ===
     tool-log)
         # helper.sh tool-log <tool_name> <file_path>
@@ -233,8 +158,6 @@ case "$CMD" in
     stats)
         echo "=== DB Stats ==="
         echo "Sessions: $(sqlite3 "$DB_PATH" 'SELECT COUNT(*) FROM sessions;')"
-        echo "Context entries: $(sqlite3 "$DB_PATH" 'SELECT COUNT(*) FROM context;')"
-        echo "Tasks (pending): $(sqlite3 "$DB_PATH" "SELECT COUNT(*) FROM tasks WHERE status='pending';")"
         echo "Decisions: $(sqlite3 "$DB_PATH" 'SELECT COUNT(*) FROM decisions;')"
         echo "Tool usages: $(sqlite3 "$DB_PATH" 'SELECT COUNT(*) FROM tool_usage;')"
         echo "Commits: $(sqlite3 "$DB_PATH" 'SELECT COUNT(*) FROM commits;')"
@@ -254,14 +177,6 @@ case "$CMD" in
         echo "Commands:"
         echo "  session-current         Current session ID"
         echo "  session-info [n]        Last N sessions"
-        echo "  ctx-get <key>           Get context value"
-        echo "  ctx-set <key> <val> [cat] Set context"
-        echo "  ctx-search <keyword>    Search context"
-        echo "  ctx-list [category]     List context"
-        echo "  task-add <desc> [pri] [cat] Add task"
-        echo "  task-list [status|all]  List tasks"
-        echo "  task-done <id>          Complete task"
-        echo "  task-update <id> <st>   Update task status"
         echo "  decision-add <desc> <reason> Record decision"
         echo "  decision-list [n]       List decisions"
         echo "  error-log <type> <file> Log error"
@@ -269,10 +184,8 @@ case "$CMD" in
         echo "  commit-log <hash> <msg> Log commit"
         echo "  tool-log <tool> <file>  Log tool usage"
         echo "  live-set <key> <val>    Set live context (compaction-safe)"
-        echo "  live-append <key> <val> [limit] Append to live context list (dedup, default limit 20)"
         echo "  live-get [key]          Get live context"
         echo "  live-dump               Dump all live context"
-        echo "  live-clear              Clear live context"
         echo "  stats                   Show DB statistics"
         echo "  query <sql>             Run raw SQL"
         echo ""
@@ -280,7 +193,5 @@ case "$CMD" in
         echo "    agent-task <name> [content]     에이전트 태스크 설정/조회 (stdin 지원)"
         echo "    agent-result <name> [content]   에이전트 결과 설정/조회 (stdin 지원)"
         echo "    agent-context <key> [value]     공유 컨텍스트 설정/조회 (stdin 지원)"
-        echo "    agent-cleanup <name>            에이전트 태스크+결과 삭제"
-        echo "    agent-list                      에이전트 관련 항목 전체 조회"
         ;;
 esac

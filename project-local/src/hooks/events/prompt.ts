@@ -74,9 +74,8 @@ export async function handlePrompt({ projectRoot, db }: PromptInput): Promise<vo
       writeFileSync(ctxStatePath, JSON.stringify(newState));
 
       const sessionEdits = getSessionEdits(db, sessionId);
-      const pendingTasks = getPendingCount(db);
       process.stdout.write(
-        `[ctx] Session #${sessionId} | Edits: ${sessionEdits} files | Pending tasks: ${pendingTasks}\n` +
+        `[ctx] Session #${sessionId} | Edits: ${sessionEdits} files\n` +
         `[rules] 한국어 · verify · agent≥3 · live-set · no-commit\n`
       );
       return;
@@ -109,20 +108,6 @@ export async function handlePrompt({ projectRoot, db }: PromptInput): Promise<vo
       if (decisions.length > 0) {
         out.push('[ctx-restore] Recent decisions:');
         for (const r of decisions) out.push(r.line);
-      }
-    } catch {
-      // 무시
-    }
-
-    // pending tasks 상세
-    try {
-      const pendingCount = getPendingCount(db);
-      if (pendingCount > 0) {
-        const tasks = db.query(
-          "SELECT '  - [P' || priority || '][' || status || '] ' || description AS line FROM tasks WHERE status IN ('pending','in_progress') ORDER BY priority"
-        ) as Array<{ line: string }>;
-        out.push(`[ctx-restore] Pending tasks (${pendingCount}):`);
-        for (const r of tasks) out.push(r.line);
       }
     } catch {
       // 무시
@@ -175,10 +160,9 @@ export async function handlePrompt({ projectRoot, db }: PromptInput): Promise<vo
   } else {
     // === 기본 모드 (최소 주입) ===
     const sessionEdits = getSessionEdits(db, sessionId);
-    const pendingTasks = getPendingCount(db);
 
     process.stdout.write(
-      `[ctx] Session #${sessionId} | Edits: ${sessionEdits} files | Pending tasks: ${pendingTasks}\n` +
+      `[ctx] Session #${sessionId} | Edits: ${sessionEdits} files\n` +
       `[rules] 한국어 · verify · agent≥3 · live-set · no-commit\n`
     );
   }
@@ -187,14 +171,6 @@ export async function handlePrompt({ projectRoot, db }: PromptInput): Promise<vo
 function getSessionEdits(db: ContextDB, sessionId: number): number {
   try {
     return db.sessionEditCount(sessionId);
-  } catch {
-    return 0;
-  }
-}
-
-function getPendingCount(db: ContextDB): number {
-  try {
-    return db.pendingTaskCount();
   } catch {
     return 0;
   }

@@ -123,23 +123,6 @@ export async function handleSessionStart({ projectRoot, db }: SessionStartInput)
   if (diffHours >= 24) {
     out.push(`[checkin] Last session: ${lastSessionTime} (${diffHours}h ago - LONG BREAK)`);
     out.push('[checkin] Action needed: full briefing recommended');
-
-    // 미완료 태스크
-    try {
-      const pendingRows = db.query(
-        "SELECT COUNT(*) AS n FROM tasks WHERE status IN ('pending','in_progress')"
-      ) as Array<{ n: number }>;
-      const pending = pendingRows[0]?.n ?? 0;
-      if (pending > 0) {
-        out.push(`[checkin] Pending tasks: ${pending}`);
-        const taskRows = db.query(
-          "SELECT '  - [' || status || '] ' || description AS line FROM tasks WHERE status IN ('pending','in_progress') ORDER BY priority LIMIT 5"
-        ) as Array<{ line: string }>;
-        for (const r of taskRows) out.push(r.line);
-      }
-    } catch {
-      // 무시
-    }
   } else if (diffHours >= 4) {
     out.push(`[checkin] Last session: ${lastSessionTime} (${diffHours}h ago - moderate break)`);
     out.push('[checkin] Quick sync recommended');
@@ -154,22 +137,6 @@ export async function handleSessionStart({ projectRoot, db }: SessionStartInput)
     if (handoff) {
       out.push('');
       out.push(handoff);
-    }
-  } catch {
-    // 무시
-  }
-
-  // === A2: context 메모리 인덱스 주입 (통째 주입 대신 키 인덱스만; 상세는 on-demand) ===
-  try {
-    const idxRows = db.query(
-      `SELECT category, GROUP_CONCAT(key, ', ') AS keys FROM ` +
-        `(SELECT category, key FROM context ORDER BY access_count DESC, updated_at DESC) ` +
-        `GROUP BY category`
-    ) as Array<{ category: string; keys: string }>;
-    if (idxRows.length > 0) {
-      out.push('');
-      out.push('[memory] context 인덱스 (상세: helper.sh ctx-get <key>):');
-      for (const r of idxRows) out.push(`  [${r.category}] ${r.keys}`);
     }
   } catch {
     // 무시

@@ -83,16 +83,6 @@ SQLite context 분석 → 자동화 가능한 패턴 발견 → skill/command/ho
    ORDER BY edits * (1 + errors) DESC LIMIT 10;
    ```
 
-   i. 반복 프롬프트 (자산화 후보 — 동일 content_hash 반복 = 같은 요청 반복):
-   ```sql
-   SELECT content_hash, COUNT(*) AS freq,
-     GROUP_CONCAT(DISTINCT keyword_tags) AS tags
-   FROM prompts
-   GROUP BY content_hash
-   HAVING freq >= 3
-   ORDER BY freq DESC LIMIT 10;
-   ```
-
 3. 패턴 해석 및 제안 생성:
 
    | 발견 패턴 | 제안 유형 | 제안 내용 |

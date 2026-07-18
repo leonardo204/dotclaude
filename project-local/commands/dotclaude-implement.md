@@ -97,7 +97,6 @@ Agent(subagent_type="reviewer", prompt="변경된 코드를 리뷰하세요. git
 2. Context DB에 기록:
    ```bash
    bash .claude/db/helper.sh decision-add "구현 완료: {요약}"
-   bash .claude/db/helper.sh task-done {task_id}
    ```
 
 3. 사용자에게 최종 확인 요청:
