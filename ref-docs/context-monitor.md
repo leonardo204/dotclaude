@@ -44,7 +44,7 @@ HUD statusline은 `dist/hud/statusline.js`(TypeScript 빌드 산출물)가 담�
         ├─ 비용 캐시(~/.claude/.hud_cost_cache.json) 읽기 + stale 시 cost.js 워커 스폰
         └─ 통합 HUD 한 줄 출력
 
-[사용자 입력] on-prompt.sh (UserPromptSubmit hook)
+[사용자 입력] prompt 핸들러 (UserPromptSubmit hook, bridge.js)
         ├─ .ctx_state에서 alert 확인
         ├─ alert=high → "상태 저장하라" 리마인더 주입
         └─ alert=compacted → live_context 테이블에서 복구 주입 → alert 클리어
@@ -64,7 +64,7 @@ HUD statusline은 `dist/hud/statusline.js`(TypeScript 빌드 산출물)가 담�
 | `~/.claude/.hud_cost_parse/` | 파일별 파싱 캐시 (변경 파일만 재파싱) |
 | `~/.claude/.hud_cache` | OAuth API 응답 캐시 (글로벌) |
 | `.claude/db/context.db` → `live_context` 테이블 | 작업 상태 KV 저장소 |
-| `.claude/hooks/on-prompt.sh` | 복구 주입 로직 |
+| `dist/hooks/bridge.js` (`prompt` 핸들러) | 복구 주입 로직 (구 on-prompt.sh) |
 
 ## .ctx_state 형식
 
@@ -113,7 +113,6 @@ CREATE TABLE live_context (
 bash .claude/db/helper.sh live-set <key> <value>   # UPSERT
 bash .claude/db/helper.sh live-get [key]            # 조회 (key 생략 시 전체)
 bash .claude/db/helper.sh live-dump                 # 포맷된 전체 출력
-bash .claude/db/helper.sh live-clear                # 전체 삭제
 ```
 
 ## Rate Limit 데이터 (stdin 우선)
@@ -186,9 +185,10 @@ Project .claude/settings.json  >  Global ~/.claude/settings.json
 
 ## 다른 프로젝트에 적용
 
-1. `.claude/dist/hud/statusline.js` + `fetcher.js` 복사
-2. `.claude/hooks/on-prompt.sh`에 ctx_state 읽기 로직 추가
-3. `.claude/db/init.sql`에 `live_context` 테이블 추가
-4. `.claude/db/helper.sh`에 `live-*` 명령 추가
-5. `.gitignore`에 `context.db`, `.ctx_state` 추가
-6. statusLine 설정: Global (모든 프로젝트 공유) 또는 Project (개별 프로젝트)
+`dotclaude-init`/`dotclaude-update`가 `manifest.json` 기반으로 아래를 자동 배포한다:
+
+1. `dist/hud/statusline.js` + `fetcher.js` + `cost.js`
+2. `dist/hooks/bridge.js` (`prompt` 핸들러에 ctx_state 읽기·복구 주입 포함)
+3. `db/init.sql`의 `live_context` 테이블 + `helper.sh`의 `live-*` 명령
+4. `.gitignore`에 `context.db`, `.ctx_state`
+5. statusLine 설정: Global(모든 프로젝트 공유) 또는 Project(개별)
