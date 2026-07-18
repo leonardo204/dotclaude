@@ -4,6 +4,7 @@
 
 - 한국어로 대화 (코드/커밋 제외)
 - Documentation-First: 구현 전 공식 문서 확인. Context7 MCP: `resolve-library-id` → `query-docs`
+- Research-First: 기술 선택·트렌드·비교·레퍼런스 등 다축 조사가 필요하면 `scoped-research` 스킬로 수행(단발 사실 확인은 제외). 웹검색·리서치는 이 스킬의 Parse→Scope→Sweep→종합 절차를 따른다
 - Verification: 완료 선언 전 검증 증거(빌드/테스트/타입체크) 필수
 - Continuation: 미완료 태스크, 미통과 테스트, 에러가 있으면 계속 작업
 
