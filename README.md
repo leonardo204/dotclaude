@@ -47,6 +47,8 @@ cd dotclaude && bash install.sh
 /dotclaude-update      # 기존 프로젝트 — 최신 업데이트 적용
 ```
 
+> 배포 대상은 `manifest.json` 단일 소스로 정의되고, 버전(git SHA)이 이미 최신이면 재설치를 건너뜁니다. 그래서 한 PC의 여러 프로젝트에서 `/dotclaude-update`를 돌려도 공통 환경(HUD·글로벌 설정)은 처음 한 번만 갱신됩니다.
+
 ---
 
 ## 주요 기능
@@ -242,27 +244,23 @@ flowchart LR
 
 **1. 세션 간 연속성** — 새 대화창이 직전 작업을 즉시 이어받습니다.
 
-- **핸드오프 주입**: 세션 종료 시 편집 파일·커밋·결정·미완료 태스크를 구조화해 `session_handoff`에 저장 → 다음 세션 시작에 자동 주입.
-- **메모리 인덱스**: 컨텍스트를 통째 주입하지 않고 카테고리별 키 인덱스만 주입(상세는 필요 시 `ctx-get`으로 조회) → 1M이라도 토큰·노이즈 절감.
+- **핸드오프 주입**: 세션 종료 시 편집 파일·커밋·결정을 구조화해 `session_handoff`에 저장 → 다음 세션 시작에 자동 주입. LLM 요약이 아니라 사실 블록이라 손실이 없습니다.
 
-**2. 메모리 품질** (벡터 DB 없이 SQLite로)
+> 사실·학습·선호의 영속 메모리는 Claude Code 네이티브 **auto-memory**(`/memory`)를 씁니다. Context DB는 운영 이력과 compaction-safe 핸드오프에 특화돼 있습니다.
 
-- **Decay 재랭킹**: 자주 회상한 항목을 우선 노출, 오래된 노이즈는 자동 후순위.
-- **FTS5 전문검색**: 키워드 검색 정확도 향상(`ctx-search`).
-
-**3. Compaction 안전망** — 빈도는 줄었지만 여전히 대비합니다.
+**2. Compaction 안전망** — 빈도는 줄었지만 여전히 대비합니다.
 
 | 항목 | 캡처 시점 | 내용 |
 |------|-----------|------|
-| `session_handoff` | 세션 종료 시 | 편집·커밋·결정·미완료 태스크 → **다음 세션 주입** |
+| `session_handoff` | 세션 종료 시 | 편집·커밋·결정 → **다음 세션 주입** |
 | `working_files` | 컨텍스트 70% 도달 시 | 편집 중인 파일 경로 (최대 20개) |
 | `error_context` | 에러 발생 시 | 에러 유형 + 관련 파일 경로 |
 | `_rules` | 세션 시작 시 | CLAUDE.md 핵심 지침 |
 | `current_task` | 수동 저장 | 현재 진행 중인 작업 설명 |
 
-**3단계 차등 주입**: 매 턴 컨텍스트 사용률에 따라 — 기본(70% 미만, 핸드오프+메모리 인덱스) → 경고(70~90%, working_files·error_context 추가) → 복구(compaction 감지 시 DB에서 전체 상태 복원).
+**3단계 차등 주입**: 매 턴 컨텍스트 사용률에 따라 — 기본(70% 미만, 핸드오프) → 경고(70~90%, working_files·error_context 추가) → 복구(compaction 감지 시 DB에서 전체 상태 복원).
 
-> 상세: `claude/context-db.md`의 "1M 컨텍스트 시대 활용" 섹션
+> 상세: `claude/context-db.md`, `claude/context-monitor.md`
 
 ---
 
