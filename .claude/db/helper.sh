@@ -2,7 +2,7 @@
 # SQLite DB Helper - 에이전트/Hook에서 공통 사용
 # Usage: bash .claude/db/helper.sh <command> [args...]
 
-PROJECT_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+PROJECT_ROOT="$(CDPATH= cd -- "$(dirname "$0")/../.." && pwd)"
 DB_PATH="$PROJECT_ROOT/.claude/db/context.db"
 INIT_SQL="$PROJECT_ROOT/.claude/db/init.sql"
 
