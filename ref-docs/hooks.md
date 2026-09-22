@@ -24,7 +24,9 @@ settings.json → HOOK_EVENT=xxx bridge.js → events/xxx.ts 핸들러 → DB/st
 | PostToolUseFailure (Bash) | `post-bash-fail` | `events/post-bash-failure.ts` | **실패한** Bash를 기록. 페이로드의 `error`(exit code 포함)·`is_interrupt`(ESC 중단 제외) 사용 |
 | Stop | `stop` | `events/stop.ts` | 통합 핸들러(아래) |
 
-추가로 `SessionStart`/`UserPromptSubmit`에서 HUD rate-limit 폴백 데몬 `dist/hud/fetcher.js`를 `&`(백그라운드)로 스폰한다. → [Context Monitor](context-monitor.md)
+추가로 `SessionStart`/`UserPromptSubmit`에서 HUD rate-limit 폴백 데몬 `dist/hud/fetcher.js`를 백그라운드로 스폰한다. → [Context Monitor](context-monitor.md)
+
+> **백그라운드 훅은 stdio를 반드시 끊어야 한다.** `cmd &`로만 띄운 자식은 훅의 stdout/stderr 파이프를 그대로 상속하고, Claude Code는 그 파이프의 EOF를 기다린다. 즉 자식이 사는 동안 훅이 끝나지 않는다(fetcher는 최대 24시간 산다). 그래서 호출부는 `</dev/null >/dev/null 2>&1 &`로 쓰고, 데몬 쪽도 `detached: true` + `stdio: "ignore"`(또는 로그 파일 fd)로 자기 자신을 재스폰해 호출부 실수에 대비한다.
 
 ### PostToolUse vs PostToolUseFailure
 
