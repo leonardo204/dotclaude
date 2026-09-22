@@ -70,3 +70,53 @@ describe('settings.json ↔ bridge.ts 배선', () => {
     );
   });
 });
+
+describe('백그라운드 훅 stdio 계약', () => {
+  // `cmd &`로만 띄운 자식은 훅의 stdout/stderr 파이프를 상속하고, Claude Code는
+  // 그 파이프의 EOF를 기다린다. 데몬이 사는 동안 훅이 끝나지 않는다 — fetcher는
+  // 최대 24시간 산다. 손으로 편집되는 문자열이라 조용히 되돌아가기 쉬워 계약으로 고정한다.
+  const GLOBAL_SETTINGS = JSON.parse(
+    readFileSync(join(__dirname, '..', '..', 'global', 'settings.json'), 'utf8')
+  );
+
+  /** settings 객체에서 백그라운드(`&`로 끝나는) 훅 커맨드를 모은다. */
+  function backgroundCommands(settings) {
+    const found = [];
+    for (const [event, entries] of Object.entries(settings.hooks)) {
+      for (const entry of entries) {
+        for (const hook of entry.hooks) {
+          if (/&\s*$/.test(hook.command)) found.push({ event, command: hook.command });
+        }
+      }
+    }
+    return found;
+  }
+
+  for (const [label, settings] of [
+    ['project-local', SETTINGS],
+    ['global', GLOBAL_SETTINGS],
+  ]) {
+    test(`${label}: 백그라운드 훅은 stdio를 끊는다`, () => {
+      const commands = backgroundCommands(settings);
+      assert.ok(commands.length > 0, `${label}에 백그라운드 훅이 하나도 없다`);
+      for (const { event, command } of commands) {
+        assert.match(
+          command,
+          /<\s*\/dev\/null/,
+          `${label}/${event}: stdin을 끊지 않았다 — ${command}`
+        );
+        assert.match(
+          command,
+          />\s*\/dev\/null\s+2>&1/,
+          `${label}/${event}: stdout/stderr를 끊지 않아 훅이 자식 수명만큼 붙잡힌다 — ${command}`
+        );
+      }
+    });
+  }
+
+  test('global과 project-local의 hooks 섹션이 동일하다', () => {
+    // CLAUDE.md 체크리스트: statusLine만 다르고 hooks는 같아야 한다.
+    // 한쪽만 고치면 update 시 구버전이 배포된다.
+    assert.deepEqual(SETTINGS.hooks, GLOBAL_SETTINGS.hooks);
+  });
+});

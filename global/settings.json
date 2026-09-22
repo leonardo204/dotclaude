@@ -20,7 +20,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node --no-warnings=ExperimentalWarning ~/.claude/dist/hud/fetcher.js &"
+            "command": "node --no-warnings=ExperimentalWarning ~/.claude/dist/hud/fetcher.js </dev/null >/dev/null 2>&1 &"
           }
         ]
       }
@@ -40,7 +40,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node --no-warnings=ExperimentalWarning ~/.claude/dist/hud/fetcher.js &"
+            "command": "node --no-warnings=ExperimentalWarning ~/.claude/dist/hud/fetcher.js </dev/null >/dev/null 2>&1 &"
           }
         ]
       }

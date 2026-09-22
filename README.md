@@ -289,7 +289,9 @@ HUD는 Claude Code가 statusline에 직접 주는 stdin 데이터(rate limit·�
 
 **HUD 설치 범위**: `install.sh` 실행 시 Global(모든 프로젝트), Project(dotclaude-init한 프로젝트만), Skip(미설치) 중 선택할 수 있습니다. 설치 후에도 `/dotclaude-statusline` 명령으로 언제든 on/off 전환이 가능합니다.
 
-> **Rate limit 데이터 출처 (투명성)**: 사용량(5h/wk)은 Claude Code가 statusline에 직접 주는 `rate_limits`(CC 2.1+, Pro/Max)를 **1차로** 사용합니다. 이 값이 없는 환경(첫 API 응답 전 등)에서만, 백그라운드 fetcher가 `api.anthropic.com/api/oauth/usage`를 로컬 OAuth 토큰(macOS Keychain 또는 `~/.claude/.credentials.json`)으로 조회해 캐시를 채웁니다. 외부 전송은 없으며, fetcher는 `/dotclaude-statusline off` 또는 `~/.claude/.hud_disabled`로 비활성화할 수 있습니다.
+> **Rate limit 데이터 출처 (투명성)**: statusline이 표시하는 사용량(5h/wk)은 Claude Code가 stdin으로 직접 주는 `rate_limits`(CC 2.1+, Pro/Max)를 **1차로** 사용하고, 그 값이 없는 환경(첫 API 응답 전 등)에서만 캐시(`~/.claude/.hud_cache`)로 폴백합니다.
+>
+> 그 캐시를 채우는 백그라운드 fetcher는 `SessionStart`/`UserPromptSubmit` 훅에서 기동되며, stdin 값의 유무와 무관하게 `api.anthropic.com/api/oauth/usage`를 로컬 OAuth 토큰(macOS Keychain 또는 `~/.claude/.credentials.json`)으로 조회합니다. 외부 전송은 없습니다. `/dotclaude-statusline off` 또는 `~/.claude/.hud_disabled`가 있으면 fetcher는 기동 즉시 종료하고 이미 떠 있던 데몬도 정지시키므로, 그 시점부터 조회가 멈춥니다. 진단 로그는 `~/.claude/.hud_fetcher.log`에 남습니다(64KB 초과 시 리셋).
 
 ---
 

@@ -118,9 +118,11 @@ bash .claude/db/helper.sh live-dump                 # 포맷된 전체 출력
 ## Rate Limit 데이터 (stdin 우선)
 
 1. **1차**: Claude Code가 statusline stdin으로 주는 `rate_limits.{five_hour,seven_day}`(CC 2.1+, Pro/Max, 첫 API 응답 후). **외부 호출 없음.**
-2. **폴백**: stdin에 없을 때만 백그라운드 `dist/hud/fetcher.js`가 `api.anthropic.com/api/oauth/usage`를 OAuth로 조회 → `~/.claude/.hud_cache`(15분 갱신).
+2. **폴백**: stdin에 값이 없으면 `~/.claude/.hud_cache`를 읽는다.
+   - 그 캐시는 백그라운드 데몬 `dist/hud/fetcher.js`가 채운다. 데몬은 훅에서 기동되며 **stdin 값의 유무와 무관하게** `api.anthropic.com/api/oauth/usage`를 OAuth로 조회한다(15분 갱신).
    - 인증: macOS Keychain `Claude Code-credentials` 또는 `~/.claude/.credentials.json`
-   - 외부 전송 없음. `/dotclaude-statusline off` 또는 `~/.claude/.hud_disabled`로 비활성화.
+   - 외부 전송 없음. `/dotclaude-statusline off` 또는 `~/.claude/.hud_disabled`가 있으면 데몬은 기동 즉시 종료하고, **이미 떠 있던 데몬에도 SIGTERM을 보내 정지시킨다.** 새 기동만 막으면 데몬의 15분 루프는 플래그를 다시 읽지 않으므로 HUD를 끈 뒤에도 최대 24시간 조회가 이어진다.
+   - 데몬은 훅의 stdout/stderr를 물지 않도록 stdio를 끊은 detached 자식으로 자기 자신을 재스폰한다(`statusline.ts`의 `spawnCostWorker()`와 같은 패턴). 그래서 진단 로그는 터미널이 아니라 `~/.claude/.hud_fetcher.log`에 쌓인다(64KB 초과 시 리셋).
 
 ## 색상 코딩
 

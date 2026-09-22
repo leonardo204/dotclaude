@@ -1,7 +1,9 @@
 // src/hud/fetcher.ts
-import { existsSync as existsSync2, readFileSync as readFileSync2, writeFileSync as writeFileSync2, unlinkSync } from "node:fs";
+import { existsSync as existsSync2, readFileSync as readFileSync2, writeFileSync as writeFileSync2, unlinkSync, openSync, fstatSync, ftruncateSync } from "node:fs";
 import { join as join2 } from "node:path";
 import { homedir as homedir2 } from "node:os";
+import { spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
 
 // src/shared/oauth.ts
 import { existsSync, readFileSync, writeFileSync, renameSync } from "node:fs";
@@ -113,6 +115,11 @@ async function getOAuthToken() {
 // src/hud/fetcher.ts
 var HUD_CACHE_FILE = join2(homedir2(), ".claude", ".hud_cache");
 var PID_FILE = join2(homedir2(), ".claude", ".hud_fetcher.pid");
+var HUD_DISABLED_FILE = join2(homedir2(), ".claude", ".hud_disabled");
+var LOG_FILE = join2(homedir2(), ".claude", ".hud_fetcher.log");
+var DAEMON_ENV = "HUD_FETCHER_DAEMON";
+var DAEMON_ARG = "--hud-fetcher-daemon";
+var LOG_MAX_BYTES = 64 * 1024;
 var FETCH_INTERVAL_MS = 15 * 60 * 1e3;
 var MAX_LIFETIME_MS = 24 * 60 * 60 * 1e3;
 var USAGE_API_URL = "https://api.anthropic.com/api/oauth/usage";
@@ -122,6 +129,59 @@ function isUsageInfoFresh(info) {
   if (!info) return false;
   if (!info.resets_at) return true;
   return new Date(info.resets_at).getTime() > Date.now();
+}
+function isHudDisabled() {
+  try {
+    return existsSync2(HUD_DISABLED_FILE);
+  } catch {
+    return false;
+  }
+}
+function stopRunningDaemon() {
+  try {
+    if (!existsSync2(PID_FILE)) return;
+    const pid = parseInt(readFileSync2(PID_FILE, "utf8").trim(), 10);
+    if (isNaN(pid) || pid === process.pid) return;
+    process.kill(pid, "SIGTERM");
+  } catch {
+    try {
+      if (existsSync2(PID_FILE)) unlinkSync(PID_FILE);
+    } catch {
+    }
+  }
+}
+function openLog() {
+  try {
+    const fd = openSync(LOG_FILE, "a");
+    try {
+      if (fstatSync(fd).size > LOG_MAX_BYTES) ftruncateSync(fd, 0);
+    } catch {
+    }
+    return fd;
+  } catch {
+    return "ignore";
+  }
+}
+function redetach() {
+  if (process.env[DAEMON_ENV] === "1" || process.argv.includes(DAEMON_ARG)) {
+    return false;
+  }
+  try {
+    const out = openLog();
+    const child = spawn(
+      process.execPath,
+      [...process.execArgv, fileURLToPath(import.meta.url), DAEMON_ARG],
+      {
+        detached: true,
+        stdio: ["ignore", out, out],
+        env: { ...process.env, [DAEMON_ENV]: "1" }
+      }
+    );
+    child.unref();
+    return true;
+  } catch {
+    return false;
+  }
 }
 function writePid() {
   try {
@@ -236,6 +296,13 @@ async function fetchUsage() {
   }
 }
 async function main() {
+  if (isHudDisabled()) {
+    stopRunningDaemon();
+    process.exit(0);
+  }
+  if (redetach()) {
+    process.exit(0);
+  }
   if (isAlreadyRunning()) {
     console.log("[fetcher] already running, exiting");
     process.exit(0);
