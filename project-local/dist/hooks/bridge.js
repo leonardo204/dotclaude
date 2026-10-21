@@ -1193,6 +1193,8 @@ ${parts.join("\n")}`
 // src/hooks/events/stop-ralph.ts
 import { readFileSync as readFileSync6, existsSync as existsSync5, statSync as statSync2 } from "node:fs";
 var RALPH_STALE_MS = 30 * 60 * 1e3;
+var RALPH_AGENT_TYPE = "ralph";
+var RALPH_BLOCK_REASON = 'Ralph \uBAA8\uB4DC \uD65C\uC131: \uD0DC\uC2A4\uD06C \uBBF8\uC644\uB8CC \uC0C1\uD0DC\uC785\uB2C8\uB2E4. .claude/.ralph_state\uB97C \uD655\uC778\uD558\uACE0 \uB0A8\uC740 \uD0DC\uC2A4\uD06C\uB97C \uACC4\uC18D\uD558\uC138\uC694. \uBAA8\uB4E0 \uD0DC\uC2A4\uD06C\uAC00 \uAC80\uC99D\uAE4C\uC9C0 \uB05D\uB0AC\uB2E4\uBA74 .ralph_state\uC758 status\uB97C "completed"\uB85C \uBC14\uAFBC \uB4A4 \uC885\uB8CC\uD558\uC138\uC694.';
 function evaluateRalphBlock({
   projectRoot,
   stdinData
@@ -1207,6 +1209,7 @@ function evaluateRalphBlock({
     }
   }
   if (hookInput.stop_hook_active === true) return null;
+  if (hookInput.agent_type !== RALPH_AGENT_TYPE) return null;
   let ralphState = {};
   try {
     const raw = readFileSync6(ralphStatePath, "utf8");
@@ -1225,8 +1228,8 @@ function evaluateRalphBlock({
   if (active && status !== "completed") {
     return {
       decision: "block",
-      reason: "prompt",
-      systemMessage: "Ralph \uBAA8\uB4DC \uD65C\uC131: \uD0DC\uC2A4\uD06C \uBBF8\uC644\uB8CC \uC0C1\uD0DC\uC785\uB2C8\uB2E4. .claude/.ralph_state\uB97C \uD655\uC778\uD558\uACE0 \uC791\uC5C5\uC744 \uACC4\uC18D\uD558\uC138\uC694."
+      reason: RALPH_BLOCK_REASON,
+      systemMessage: RALPH_BLOCK_REASON
     };
   }
   return null;
@@ -1294,6 +1297,20 @@ async function handleStop({
   }
 }
 
+// src/hooks/events/subagent-stop.ts
+function handleSubagentStop({ projectRoot, stdinData }) {
+  let block = null;
+  try {
+    block = evaluateRalphBlock({ projectRoot, stdinData });
+  } catch (err) {
+    process.stderr.write(`[hook:subagent-stop] ralph \uD310\uC815 \uC2E4\uD328: ${String(err)}
+`);
+  }
+  if (block) {
+    process.stdout.write(JSON.stringify(block, null, 2) + "\n");
+  }
+}
+
 // src/hooks/bridge.ts
 function findProjectRoot() {
   if (process.env["PROJECT_ROOT"]) {
@@ -1330,6 +1347,10 @@ async function main() {
     process.stderr.write(`[bridge] DB \uC5F0\uACB0 \uC2E4\uD328: ${err}
 `);
     db = null;
+  }
+  if (hookEvent === "subagent-stop") {
+    handleSubagentStop({ projectRoot, stdinData });
+    return;
   }
   if (hookEvent === "stop") {
     try {

@@ -93,6 +93,17 @@ export interface StopInput extends HookInputBase {
   session_crons: unknown[];
 }
 
+/**
+ * SubagentStop 훅 입력 (공식 문서: code.claude.com/docs/en/hooks "SubagentStop input").
+ * Stop 필드에 서브에이전트 식별 필드가 더해진다. `agent_type`은 `.claude/agents/*.md`의 name이며,
+ * 메인 세션이 `claude --agent <name>`으로 실행되면 Stop 입력에도 같은 필드가 실린다.
+ */
+export interface SubagentStopInput extends StopInput {
+  agent_id: string;
+  agent_type: string;
+  agent_transcript_path: string;
+}
+
 /** Notification 훅 입력 (실측). permission_mode/effort는 오지 않는다. */
 export interface NotificationInput extends HookInputBase {
   message: string;

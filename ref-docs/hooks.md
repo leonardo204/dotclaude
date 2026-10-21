@@ -23,6 +23,7 @@ settings.json → HOOK_EVENT=xxx bridge.js → events/xxx.ts 핸들러 → DB/st
 | PostToolUse (Bash) | `post-bash` | `events/post-bash.ts` | **성공한** Bash 출력에 에러 문구가 있으면 분류·기록(오탐 게이트 `looksLikeError`) |
 | PostToolUseFailure (Bash) | `post-bash-fail` | `events/post-bash-failure.ts` | **실패한** Bash를 기록. 페이로드의 `error`(exit code 포함)·`is_interrupt`(ESC 중단 제외) 사용 |
 | Stop | `stop` | `events/stop.ts` | 통합 핸들러(아래) |
+| SubagentStop (ralph) | `subagent-stop` | `events/subagent-stop.ts` | ralph 서브에이전트 persist 판정만(아래) |
 
 추가로 `SessionStart`/`UserPromptSubmit`에서 HUD rate-limit 폴백 데몬 `dist/hud/fetcher.js`를 백그라운드로 스폰한다. → [Context Monitor](context-monitor.md)
 
@@ -37,11 +38,20 @@ Claude Code는 도구 **성공** 시 `PostToolUse`, **실패**(non-zero exit) �
 과거 Stop 이벤트에 3개 훅(`stop-session` + `stop-ralph` + `messenger.sh notify &`)이 **병렬** 등록돼, 알림이 handoff 기록보다 먼저 읽는 경합이 있었다. 이를 단일 핸들러로 통합해 순서를 코드로 보장한다:
 
 1. 세션 통계 + `session_summary`/`session_handoff` 기록 (`stop-session.ts` 모듈)
-2. ralph 판정 — active+미완료면 block 응답 반환 (`stop-ralph.ts` 모듈, 순수 함수)
+2. ralph 판정 — `agent_type`이 `ralph`(= `claude --agent ralph`)이고 active+미완료면 block 응답 반환 (`stop-ralph.ts` 모듈, 순수 함수). 일반 메인 세션은 `agent_type`이 없으므로 막지 않는다
 3. 알림 전송 (`messenger/notify.ts`) — 1 이후라 handoff 경합 없음
 4. block이면 stdout에 JSON 1개만 출력
 
 `stop-session.ts`·`stop-ralph.ts`는 독립 훅이 아니라 `stop.ts`가 호출하는 모듈이다.
+
+### ralph persist는 SubagentStop에서 (`events/subagent-stop.ts`)
+
+ralph는 서브에이전트다. 서브에이전트가 멈출 때는 `Stop`이 아니라 `SubagentStop`이 발동한다(공식 문서). 예전엔 ralph 판정이 `Stop`에만 붙어 있어서, ralph를 **백그라운드로 띄운 동안 메인 세션의 턴 종료가 계속 막히고**(`.ralph_state`가 active인 동안 매 턴), 정작 ralph 자신은 한 번도 막히지 않았다. 게다가 `reason`이 자리표시자 `'prompt'`여서 화면에는 "Stop hook feedback: prompt"만 보였다.
+
+- `SubagentStop`을 matcher `ralph`로 등록 → ralph 서브에이전트가 멈추려 할 때만 발동
+- 판정 함수도 입력의 `agent_type === 'ralph'`를 다시 확인 → matcher가 넓어지거나 메인 Stop에서 호출돼도 다른 주체는 막히지 않음
+- block의 `reason`은 실제 지시문(`.ralph_state` 확인, 끝났으면 `status: "completed"`) — `reason`이 모델의 다음 지시로 전달되기 때문
+- DB·알림 없음. stdout은 Stop과 같은 JSON 프로토콜(1개 또는 무출력)
 
 ## stdout 가시성 제약
 
@@ -50,7 +60,7 @@ Claude Code는 도구 **성공** 시 `PostToolUse`, **실패**(non-zero exit) �
 | SessionStart | ✅ | 세션 시작 메시지, handoff, rules |
 | UserPromptSubmit | ✅ | 컨텍스트 주입(rules, errors, live_context) |
 | PostToolUse / PostToolUseFailure | ❌ | 백그라운드 DB 기록만 (stdout 0바이트) |
-| Stop | ❌ | JSON 프로토콜만 (`{"decision":"block"}`) — 디버그 로그는 stderr로 |
+| Stop / SubagentStop | ❌ | JSON 프로토콜만 (`{"decision":"block","reason":...}`) — 디버그 로그는 stderr로 |
 
 ## prompt.ts 3단계 차등 주입
 

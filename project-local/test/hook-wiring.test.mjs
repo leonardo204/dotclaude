@@ -61,6 +61,15 @@ describe('settings.json ↔ bridge.ts 배선', () => {
     assert.match(BRIDGE_SRC, /handlePostBashFailure\(/);
   });
 
+  test('ralph persist는 SubagentStop(matcher ralph)에 등록된다', () => {
+    // ralph는 서브에이전트다 — 서브에이전트 종료는 Stop이 아니라 SubagentStop으로 온다.
+    const entries = SETTINGS.hooks.SubagentStop;
+    assert.ok(Array.isArray(entries) && entries.length > 0, 'SubagentStop 훅이 없다');
+    assert.equal(entries[0].matcher, 'ralph');
+    assert.match(entries[0].hooks[0].command, /HOOK_EVENT=subagent-stop\b/);
+    assert.match(BRIDGE_SRC, /handleSubagentStop\(/);
+  });
+
   test('post-bash-fail은 PostToolUseFailure에만 등록된다', () => {
     const postToolUse = JSON.stringify(SETTINGS.hooks.PostToolUse);
     assert.equal(

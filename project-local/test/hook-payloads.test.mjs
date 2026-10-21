@@ -115,6 +115,19 @@ describe('픽스처 익명화', () => {
 describe('stop-ralph 회귀 (실측 Stop 페이로드 사용)', () => {
   let dir;
 
+  // 판정은 "멈추려는 주체가 ralph일 때"만 한다. ralph는 서브에이전트라 실제로는
+  // SubagentStop 페이로드(agent_type: "ralph")로 들어온다. 실측 Stop 픽스처에
+  // 공식 문서의 SubagentStop 필드를 얹어 ralph 페이로드를 만든다.
+  function ralphStop(stop) {
+    return {
+      ...stop,
+      hook_event_name: 'SubagentStop',
+      agent_id: 'def456',
+      agent_type: 'ralph',
+      agent_transcript_path: '/tmp/agent-def456.jsonl',
+    };
+  }
+
   function setupRalphState(state) {
     dir = mkdtempSync(join(tmpdir(), 'ralph-test-'));
     mkdirSync(join(dir, '.claude'), { recursive: true });
@@ -126,7 +139,7 @@ describe('stop-ralph 회귀 (실측 Stop 페이로드 사용)', () => {
   // 통합 핸들러(stop.ts)가 담당한다. 여기서는 반환 계약을 검증한다.
   test('활성 + 미완료면 block 응답을 반환한다', () => {
     const root = setupRalphState({ active: true, status: 'working' });
-    const [stop] = loadFixture('stop.jsonl');
+    const stop = ralphStop(loadFixture('stop.jsonl')[0]);
 
     const result = evaluateRalphBlock({ projectRoot: root, stdinData: JSON.stringify(stop) });
 
@@ -136,7 +149,7 @@ describe('stop-ralph 회귀 (실측 Stop 페이로드 사용)', () => {
 
   test('stop_hook_active=true면 무한 루프 방지를 위해 null을 반환한다', () => {
     const root = setupRalphState({ active: true, status: 'working' });
-    const [stop] = loadFixture('stop.jsonl');
+    const stop = ralphStop(loadFixture('stop.jsonl')[0]);
     const payload = { ...stop, stop_hook_active: true };
 
     const result = evaluateRalphBlock({ projectRoot: root, stdinData: JSON.stringify(payload) });
@@ -147,7 +160,7 @@ describe('stop-ralph 회귀 (실측 Stop 페이로드 사용)', () => {
 
   test('completed 상태면 null을 반환한다', () => {
     const root = setupRalphState({ active: true, status: 'completed' });
-    const [stop] = loadFixture('stop.jsonl');
+    const stop = ralphStop(loadFixture('stop.jsonl')[0]);
 
     const result = evaluateRalphBlock({ projectRoot: root, stdinData: JSON.stringify(stop) });
 
@@ -157,7 +170,7 @@ describe('stop-ralph 회귀 (실측 Stop 페이로드 사용)', () => {
 
   test('.ralph_state가 없으면 null을 반환한다', () => {
     const root = mkdtempSync(join(tmpdir(), 'ralph-none-'));
-    const [stop] = loadFixture('stop.jsonl');
+    const stop = ralphStop(loadFixture('stop.jsonl')[0]);
 
     const result = evaluateRalphBlock({ projectRoot: root, stdinData: JSON.stringify(stop) });
 
@@ -171,7 +184,7 @@ describe('stop-ralph 회귀 (실측 Stop 페이로드 사용)', () => {
     const statePath = join(root, '.claude', '.ralph_state');
     const old = new Date(Date.now() - 31 * 60 * 1000);
     utimesSync(statePath, old, old);
-    const [stop] = loadFixture('stop.jsonl');
+    const stop = ralphStop(loadFixture('stop.jsonl')[0]);
 
     const result = evaluateRalphBlock({ projectRoot: root, stdinData: JSON.stringify(stop) });
 
@@ -182,11 +195,73 @@ describe('stop-ralph 회귀 (실측 Stop 페이로드 사용)', () => {
   test('갓 갱신된 활성 상태는 정상 차단한다(회귀)', () => {
     // stale 로직이 살아있는 ralph 루프까지 죽이지 않는지 확인.
     const root = setupRalphState({ active: true, status: 'working' });
-    const [stop] = loadFixture('stop.jsonl');
+    const stop = ralphStop(loadFixture('stop.jsonl')[0]);
 
     const result = evaluateRalphBlock({ projectRoot: root, stdinData: JSON.stringify(stop) });
 
     assert.equal(result?.decision, 'block');
+    rmSync(root, { recursive: true, force: true });
+  });
+});
+
+describe('stop-ralph 판정 대상 한정 (agent_type)', () => {
+  function setup() {
+    const root = mkdtempSync(join(tmpdir(), 'ralph-scope-'));
+    mkdirSync(join(root, '.claude'), { recursive: true });
+    writeFileSync(
+      join(root, '.claude', '.ralph_state'),
+      JSON.stringify({ active: true, status: 'working' })
+    );
+    return root;
+  }
+
+  test('메인 세션 Stop(agent_type 없음)은 ralph가 백그라운드에서 돌아도 막지 않는다', () => {
+    // 회귀: 백그라운드 ralph 서브에이전트가 .ralph_state를 active로 두는 동안
+    // 메인 세션의 모든 턴 종료가 'prompt' block으로 막혔다.
+    const root = setup();
+    const [stop] = loadFixture('stop.jsonl');
+    assert.equal(stop.agent_type, undefined, '실측 메인 Stop 페이로드에는 agent_type이 없다');
+
+    const result = evaluateRalphBlock({ projectRoot: root, stdinData: JSON.stringify(stop) });
+
+    assert.equal(result, null);
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  test('ralph가 아닌 서브에이전트의 SubagentStop은 막지 않는다', () => {
+    const root = setup();
+    const [stop] = loadFixture('stop.jsonl');
+    const payload = { ...stop, hook_event_name: 'SubagentStop', agent_id: 'x', agent_type: 'reviewer' };
+
+    const result = evaluateRalphBlock({ projectRoot: root, stdinData: JSON.stringify(payload) });
+
+    assert.equal(result, null);
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  test('claude --agent ralph로 실행된 메인 세션 Stop은 막는다', () => {
+    // 공식 문서: agent_type은 --agent 사용 시 메인 세션 훅에도 실린다.
+    const root = setup();
+    const [stop] = loadFixture('stop.jsonl');
+    const payload = { ...stop, agent_type: 'ralph' };
+
+    const result = evaluateRalphBlock({ projectRoot: root, stdinData: JSON.stringify(payload) });
+
+    assert.equal(result?.decision, 'block');
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  test("block reason은 자리표시자('prompt')가 아니라 실제 지시문이다", () => {
+    // Stop/SubagentStop의 reason은 모델에 "계속해야 하는 이유"로 그대로 전달된다.
+    const root = setup();
+    const [stop] = loadFixture('stop.jsonl');
+    const payload = { ...stop, agent_type: 'ralph' };
+
+    const result = evaluateRalphBlock({ projectRoot: root, stdinData: JSON.stringify(payload) });
+
+    assert.notEqual(result?.reason, 'prompt');
+    assert.match(result?.reason ?? '', /\.ralph_state/);
+    assert.match(result?.reason ?? '', /completed/);
     rmSync(root, { recursive: true, force: true });
   });
 });

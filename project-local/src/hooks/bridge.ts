@@ -8,6 +8,7 @@
  *   post-bash      → PostToolUse (Bash, 성공) 핸들러
  *   post-bash-fail → PostToolUseFailure (Bash, 실패) 핸들러
  *   stop           → Stop 통합 핸들러 (세션 통계 → handoff → ralph 판정 → 알림 → JSON)
+ *   subagent-stop  → SubagentStop (matcher: ralph) — ralph persist 판정만
  *
  * Stop은 한때 3개 훅(stop-session / stop-ralph / messenger notify &)으로 나뉘어 있었다.
  * 같은 이벤트의 훅은 병렬 실행이라 알림이 handoff보다 먼저 읽는 경합이 있었다 → events/stop.ts 참조.
@@ -27,6 +28,7 @@ import { handlePostEdit } from './events/post-edit.js';
 import { handlePostBash } from './events/post-bash.js';
 import { handlePostBashFailure } from './events/post-bash-failure.js';
 import { handleStop } from './events/stop.js';
+import { handleSubagentStop } from './events/subagent-stop.js';
 
 // === 프로젝트 루트 탐색 ===
 function findProjectRoot(): string {
@@ -81,6 +83,12 @@ async function main(): Promise<void> {
   // stop만 DB 없이도 동작해야 한다 — ralph block 판정은 .ralph_state 파일만 보고,
   // 알림도 DB 재료 없이 나가야 한다(재료 부재는 섹션 생략일 뿐이다).
   // 나머지 이벤트는 DB가 전부이므로 없으면 할 일이 없다.
+  // subagent-stop은 .ralph_state 파일만 본다 — DB를 열 필요가 없다.
+  if (hookEvent === 'subagent-stop') {
+    handleSubagentStop({ projectRoot, stdinData });
+    return;
+  }
+
   if (hookEvent === 'stop') {
     try {
       await handleStop({ projectRoot, db, stdinData });
